@@ -1,222 +1,246 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:test_mobile/services/file_hosting_services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:gap/gap.dart';
-import 'package:open_filex/open_filex.dart';
-import 'package:provider/provider.dart';
-import 'package:test/providers/hotdrop_provider.dart';
-import 'package:test/utils/common/search_bar.dart';
 
-class HotdropScreen extends StatefulWidget {
-  const HotdropScreen({super.key});
+final GlobalKey<HotdopScreenScreenState> hotdropScreenKey = GlobalKey();
 
+class HotdopScreenScreen extends StatefulWidget {
+  HotdopScreenScreen() : super(key: hotdropScreenKey);
   @override
-  State<HotdropScreen> createState() => _HotdropScreenState();
+  HotdopScreenScreenState createState() => HotdopScreenScreenState();
 }
 
-class _HotdropScreenState extends State<HotdropScreen> {
-  String searchQuery = '';
+class HotdopScreenScreenState extends State<HotdopScreenScreen> {
+  final FileHostingService fileHostingService = FileHostingService();
+  bool isUploading = false;
+  bool uploadComplete = false;
 
-  IconData _getFileIcon(String fileName) {
-    final extension = fileName.split('.').last.toLowerCase();
-    switch (extension) {
-      case 'pdf':
-        return Icons.picture_as_pdf_rounded;
-      case 'doc':
-      case 'docx':
-        return Icons.description_rounded;
-      case 'xls':
-      case 'xlsx':
-        return Icons.grid_on_rounded;
-      case 'ppt':
-      case 'pptx':
-        return Icons.slideshow_rounded;
-      case 'zip':
-      case 'rar':
-      case '7z':
-        return Icons.attach_file_rounded;
-      case 'mp3':
-      case 'wav':
-      case 'ogg':
-        return Icons.music_note_rounded;
-      case 'mp4':
-      case 'avi':
-      case 'mov':
-      case 'mkv':
-        return Icons.videocam_rounded;
-      case 'jpg':
-      case 'jpeg':
-      case 'png':
-      case 'gif':
-      case 'bmp':
-        return Icons.image_rounded;
-      case 'txt':
-        return Icons.note_alt_rounded;
-      case 'apk':
-        return Icons.android_rounded;
-      case 'exe':
-        return Icons.computer_rounded;
-      default:
-        return Icons.insert_drive_file_rounded;
+  Future<void> _pickFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: true,
+    );
+    
+    if (result != null && result.files.isNotEmpty) {
+      setState(() {
+        isUploading = true;
+        uploadComplete = false;
+      });
+
+      await fileHostingService.startHosting(result.files.map((file) => File(file.path!)).toList());
+      await Future.delayed(const Duration(seconds: 1));
+
+      setState(() {
+        isUploading = false;
+        uploadComplete = true;
+      });
     }
+  }
+
+  Future<void> _launchUrl(String url) async {
+    if (!await launchUrl(Uri.parse(url))) {
+      throw Exception('Could not launch $url');
+    }
+  }
+
+  void updateState(dynamic value) {
+    setState(() {});
+  }
+
+  @override
+  void dispose() {
+    fileHostingService.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final HotdropProvider hotdropProvider = Provider.of<HotdropProvider>(context, listen: true);
-
-    final filteredFiles = hotdropProvider.files.where((file) {
-      final name = file["name"].toString().toLowerCase();
-      return name.contains(searchQuery.toLowerCase());
-    }).toList();
-
-    return Column(
-      children: [
-        Container(
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: const Color.fromARGB(255, 231, 231, 231),
-                width: 1.w,
-              ),
-            ),
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        titleSpacing: 0,
+        title: Text(
+          'HotDrop',
+          style: TextStyle(
+            color: const Color(0xFF49454F),
+            fontSize: 20.sp,
+            fontWeight: FontWeight.bold,
           ),
-          child: AppBar(
-            backgroundColor: Colors.white,
-            title: SizedBox(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
+        ),
+      ),
+      body: Padding(
+        padding: EdgeInsets.all(24.w),
+        child: Column(
+          children: [
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  IconButton(
-                    padding: EdgeInsets.zero,
-                    splashColor: Colors.transparent,
-                    highlightColor: Colors.transparent,
-                    hoverColor: Colors.transparent,
-                    onPressed: () {
-                      // Provider.of<PopupProvider>(context, listen: false).showTest();
-                    },
-                    icon: Icon(Icons.arrow_back_ios_new_rounded, size: 15.sp),
+                  Icon(
+                    uploadComplete ? Icons.check_circle : Icons.cloud_upload,
+                    size: 80.sp,
+                    color: uploadComplete ? Colors.green : const Color(0xFF49454F),
                   ),
-                  IconButton(
-                    padding: EdgeInsets.zero,
-                    splashColor: Colors.transparent,
-                    highlightColor: Colors.transparent,
-                    hoverColor: Colors.transparent,
-                    onPressed: () {},
-                    icon: Icon(Icons.arrow_forward_ios_rounded, size: 15.sp),
-                  ),
-                  Gap(20.w),
+                  Gap(24.h),
                   Text(
-                    "HotDrop",
-                    style: TextStyle(fontSize: 20.sp),
+                    uploadComplete ? 'Files Sent!' : 'HotDrop',
+                    style: TextStyle(
+                      fontSize: 24.sp,
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF49454F),
+                    ),
                   ),
-                  const Spacer(),
-
-                  // Search Bar
-                  SearchInput(
-                    onChanged: (value) {
-                      setState(() {
-                        searchQuery = value;
-                      });
-                    },
-                  )
+                  Gap(16.h),
+                  Text(
+                    uploadComplete
+                        ? 'Your files have been successfully shared'
+                        : 'Select files to share instantly',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 16.sp,
+                      color: const Color(0xFF49454F),
+                    ),
+                  ),
+                  Gap(40.h),
+                  if (!uploadComplete && !isUploading)
+                    ElevatedButton(
+                      onPressed: _pickFile,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF49454F),
+                        foregroundColor: Colors.white,
+                        minimumSize: Size(double.infinity, 50.h),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12.r),
+                        ),
+                        padding: EdgeInsets.symmetric(vertical: 16.h),
+                      ),
+                      child: Text(
+                        'SELECT FILES',
+                        style: TextStyle(fontSize: 16.sp),
+                      ),
+                    ),
+                  if (isUploading)
+                    Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.all(16.w),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF6F6F6),
+                        borderRadius: BorderRadius.circular(12.r),
+                        border: Border.all(color: const Color(0xFFE0E0E0)),
+                      ),
+                      child: Column(
+                        children: [
+                          const LinearProgressIndicator(
+                            backgroundColor: Color(0xFFE0E0E0),
+                            color: Color(0xFF49454F),
+                          ),
+                          Gap(16.h),
+                          Text(
+                            fileHostingService.selectedFiles.length == 1
+                                ? 'Sending ${fileHostingService.selectedFiles.first.path.split('/').last}...'
+                                : 'Sending ${fileHostingService.selectedFiles.length} files...',
+                            style: TextStyle(color: const Color(0xFF49454F), fontSize: 14.sp),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (uploadComplete)
+                    Column(
+                      children: [
+                        Container(
+                          constraints: BoxConstraints(maxHeight: 200.h),
+                          child: SingleChildScrollView(
+                            child: Column(
+                              children: fileHostingService.selectedFiles.map((file) {
+                                final index = fileHostingService.selectedFiles.indexOf(file);
+                                return Container(
+                                  padding: EdgeInsets.all(16.w),
+                                  margin: EdgeInsets.only(bottom: 12.h),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF6F6F6),
+                                    borderRadius: BorderRadius.circular(12.r),
+                                    border: Border.all(color: const Color(0xFFE0E0E0)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.insert_drive_file, color: Color(0xFF49454F)),
+                                      Gap(12.w),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              file.path.split('/').last,
+                                              style: TextStyle(
+                                                color: const Color(0xFF49454F),
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 14.sp,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            Gap(4.h),
+                                            Text(
+                                              '${(file.lengthSync() / (1024 * 1024)).toStringAsFixed(2)} MB',
+                                              style: TextStyle(color: const Color(0xFF49454F), fontSize: 12.sp),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.share, color: Color(0xFF49454F)),
+                                        onPressed: () {
+                                          // if (index < fileHostingService.downloadUrl.length) {
+                                          //   _launchUrl(fileHostingService.downloadUrls[index]);
+                                          // }
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                        ),
+                        Gap(20.h),
+                        ElevatedButton(
+                          onPressed: () {
+                            setState(() {
+                              uploadComplete = false;
+                              fileHostingService.dispose();
+                            });
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF49454F),
+                            foregroundColor: Colors.white,
+                            minimumSize: Size(double.infinity, 50.h),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12.r),
+                            ),
+                            padding: EdgeInsets.symmetric(vertical: 16.h),
+                          ),
+                          child: Text('SEND MORE FILES', style: TextStyle(fontSize: 16.sp)),
+                        ),
+                      ],
+                    ), 
                 ],
               ),
             ),
-          ),
-        ),
-
-        // Files Grid
-        Expanded(
-          child: GridView.builder(
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 6,
-              crossAxisSpacing: 20,
-              mainAxisSpacing: 20,
-              childAspectRatio: 1,
-            ),
-            itemCount: filteredFiles.length,
-            padding: EdgeInsets.all(10.sp),
-            itemBuilder: (context, index) {
-              final fileName = filteredFiles[index]["name"];
-              final filePath = filteredFiles[index]["location"];
-              return GestureDetector(
-                onTap: () async {
-                  await OpenFilex.open(filePath);
-                },
-                onSecondaryTapDown: (TapDownDetails details) {
-                  showMenu(
-                    context: context,
-                    color: Colors.white,
-                    position: RelativeRect.fromLTRB(
-                      details.globalPosition.dx,
-                      details.globalPosition.dy,
-                      details.globalPosition.dx,
-                      details.globalPosition.dy,
-                    ),
-                    items: [
-                      PopupMenuItem(
-                        child: Text('Open file location'),
-                        onTap: () {
-                          final directoryPath = File(filePath).parent.path;
-                          OpenFilex.open(directoryPath);
-                        },
-                      ),
-                      PopupMenuItem(
-                        child: Text('Delete'),
-                        onTap: () {
-                          File(filePath).deleteSync();
-                        },
-                      ),
-                    ],
-                  );
-                },
-                child: Column(
-                  children: [
-                    // File Icon
-                    Expanded(
-                      flex: 3,
-                      child: Container(
-                        width: 100.w,
-                        height: 100.h,
-                        decoration: BoxDecoration(
-                          color: Colors.grey[200],
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.grey[400]!),
-                        ),
-                        child: Center(
-                          child: Icon(
-                            _getFileIcon(fileName),
-                            size: 40.sp,
-                            color: Colors.grey[700],
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    Gap(10.h),
-
-                    // File name
-                    Expanded(
-                      child: Text(
-                        fileName,
-                        style: TextStyle(
-                          fontSize: 13.sp,
-                          color: Colors.black87,
-                          fontWeight: FontWeight.w400,
-                        ),
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
+            if (!uploadComplete)
+              Text(
+                'Files are transferred directly between devices',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: const Color(0xFF49454F),
+                  fontSize: 12.sp,
                 ),
-              );
-            },
-          ),
+              ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }

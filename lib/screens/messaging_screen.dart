@@ -1,23 +1,66 @@
 import 'dart:developer';
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:test/providers/message_provider.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:provider/provider.dart';
+import 'package:test_mobile/providers/message_provider.dart';
+import 'package:test_mobile/services/data_services.dart';
+import 'package:test_mobile/services/message_storage_service.dart';
 import 'package:gap/gap.dart';
-import 'package:test/services/data_services.dart';
 
-class MessagingScreen extends StatefulWidget {
-  const MessagingScreen({super.key});
+class Message {
+  final String content;
+  final bool isSent;
+  final DateTime timestamp;
 
-  @override
-  MessagingScreenState createState() => MessagingScreenState();
+  Message({
+    required this.content,
+    required this.isSent,
+    required this.timestamp,
+  });
 }
 
-class MessagingScreenState extends State<MessagingScreen> {
+class MessagingScreen extends StatefulWidget {
+  final Map<String, dynamic> data;
+
+  const MessagingScreen({required this.data, super.key});
+
+  @override
+  State<MessagingScreen> createState() => _MessagingScreenState();
+}
+
+class _MessagingScreenState extends State<MessagingScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final MessageStorageService _storageService = MessageStorageService();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStoredMessages();
+  }
+
+  void _loadStoredMessages() async {
+    final provider = Provider.of<MessageProvider>(context, listen: false);
+
+    if (provider.messages.isEmpty) {
+      final messages = await _storageService.loadMessages();
+      for (var msg in messages) {
+        provider.addMessage(msg['content'], msg['isSent'] as bool);
+      }
+    }
+  }
+
+
+  void _sendMessage() {
+    final text = _messageController.text.trim();
+    if (text.isNotEmpty) {
+      OutgoingDataParser().parseMessages(text);
+      Provider.of<MessageProvider>(context, listen: false).addMessage(text, true);
+      _storageService.saveMessage(text, true, DateTime.now());
+      _messageController.clear();
+    }
+  }
 
   @override
   void dispose() {
@@ -26,136 +69,85 @@ class MessagingScreenState extends State<MessagingScreen> {
     super.dispose();
   }
 
-  void _scrollToBottom() {
-    _scrollController.animateTo(
-      _scrollController.position.maxScrollExtent,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOut,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // AppBar and messages list
-        Container(
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: const Color.fromARGB(255, 231, 231, 231),
-                width: 1.w,
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        titleSpacing: 0,
+        title: Text(
+          'Chat',
+          style: TextStyle(
+            color: const Color(0xFF49454F),
+            fontSize: 20.sp,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+      body: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 10.h),
+        child: Column(
+          children: [
+            Expanded(
+              child: Consumer<MessageProvider>(
+                builder: (context, messageProvider, child) {
+                  return ListView.builder(
+                    controller: _scrollController,
+                    itemCount: messageProvider.messages.length,
+                    padding: EdgeInsets.only(bottom: 20.h),
+                    itemBuilder: (context, index) {
+                      log(messageProvider.messages[index].toString());
+                      return _MessageBubble(
+                        message: messageProvider.messages[index]["message"],
+                        isSent: messageProvider.messages[index]["sender"] == "Me" ? true : false,
+                      );
+                    },
+                  );
+                },
               ),
             ),
-          ),
-          child: AppBar(
-            backgroundColor: Colors.white,
-            title: SizedBox(
+            Gap(8.h),
+            Text(
+              'Messages are end-to-end encrypted',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: const Color(0xFF49454F),
+                fontSize: 12.sp,
+              ),
+            ),
+            Gap(12.h),
+            Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFF6F6F6),
+                borderRadius: BorderRadius.circular(12.r),
+                border: Border.all(color: const Color(0xFFE0E0E0)),
+              ),
+              padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 5.h),
               child: Row(
-                mainAxisSize: MainAxisSize.min,
                 children: [
-                  IconButton(
-                    padding: EdgeInsets.zero,
-                    splashColor: Colors.transparent,
-                    highlightColor: Colors.transparent,
-                    hoverColor: Colors.transparent,
-                    onPressed: () {},
-                    icon: Icon(Icons.arrow_back_ios_new_rounded, size: 15.sp),
+                  Expanded(
+                    child: TextField(
+                      controller: _messageController,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: const InputDecoration(
+                        hintText: 'Type a message...',
+                        border: InputBorder.none,
+                      ),
+                      onSubmitted: (_) => _sendMessage(),
+                    ),
                   ),
                   IconButton(
-                    padding: EdgeInsets.zero,
-                    splashColor: Colors.transparent,
-                    highlightColor: Colors.transparent,
-                    hoverColor: Colors.transparent,
-                    onPressed: () {},
-                    icon: Icon(Icons.arrow_forward_ios_rounded, size: 15.sp),
-                  ),
-                  Gap(20.w),
-                  Text(
-                    "Messaging", 
-                    style: TextStyle(fontSize: 20.sp),
+                    icon: const Icon(Icons.send),
+                    onPressed: _sendMessage,
+                    color: const Color(0xFF49454F),
                   ),
                 ],
               ),
             ),
-          ),
+          ],
         ),
-    
-        // ListView of messages
-        Expanded(
-          child: Consumer<MessageProvider>(
-            builder: (context, messageProvider, child) {
-              return ListView.builder(
-                controller: _scrollController,
-                itemCount: messageProvider.messages.length,
-                itemBuilder: (context, index) {
-                  log(messageProvider.messages.toString());
-                  return _MessageBubble(
-                    message: messageProvider.messages[index]["message"],
-                    isSent: messageProvider.messages[index]["sender"] == "Me",
-                  );
-                },
-              );
-            },
-          ),
-        ),
-    
-        // Input bar section
-        Container(
-          padding: EdgeInsets.all(8.w),
-          decoration: BoxDecoration(
-            color: Colors.grey[100],
-            border: Border(
-              top: BorderSide(color: Colors.grey[300]!),
-            ),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: KeyboardListener(
-                  focusNode: FocusNode(),
-                  onKeyEvent: (event) {
-                    if (event.logicalKey == LogicalKeyboardKey.enter) {
-                      OutgoingDataParser().parseMessages(_messageController.text, context);
-    
-                      setState(() {
-                        if (_messageController.text.isNotEmpty) {
-                          _messageController.clear();
-                        }
-                      });
-                      _scrollToBottom();
-                    }
-                  },
-                  child: TextField(
-                    controller: _messageController,
-                    decoration: InputDecoration(
-                      hintText: "Type a message...",
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8.r),
-                      ),
-                    ),
-                    style: TextStyle(fontSize: 16.sp),
-                  ),
-                ),
-              ),
-              Gap(8.w),
-              IconButton(
-                icon: Icon(Icons.send, color: Theme.of(context).primaryColor),
-                onPressed: () {
-                  OutgoingDataParser().parseMessages(_messageController.text, context);
-    
-                  setState(() {
-                    if (_messageController.text.isNotEmpty) {
-                      _messageController.clear();
-                    }
-                  });
-                  _scrollToBottom();
-                },
-              ),
-            ],
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
@@ -168,25 +160,26 @@ class _MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 15.w),
-      child: Align(
-        alignment: isSent ? Alignment.centerRight : Alignment.centerLeft,
-        child: Container(
-          constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width * 0.75,
+    return Align(
+      alignment: isSent ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: EdgeInsets.symmetric(vertical: 6.h),
+        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+        constraints: BoxConstraints(maxWidth: 0.75.sw),
+        decoration: BoxDecoration(
+          color: isSent ? const Color(0xFF49454F) : const Color(0xFFF6F6F6),
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(16.r),
+            topRight: Radius.circular(16.r),
+            bottomLeft: Radius.circular(isSent ? 16.r : 0),
+            bottomRight: Radius.circular(isSent ? 0 : 16.r),
           ),
-          margin: const EdgeInsets.symmetric(vertical: 4),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          decoration: BoxDecoration(
-            color: isSent ? Theme.of(context).primaryColor : Colors.grey[200],
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Text(
-            message,
-            style: TextStyle(
-              color: isSent ? Colors.white : Colors.black87,
-            ),
+        ),
+        child: Text(
+          message,
+          style: TextStyle(
+            color: isSent ? Colors.white : const Color(0xFF49454F),
+            fontSize: 14.sp,
           ),
         ),
       ),

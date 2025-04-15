@@ -1,72 +1,67 @@
 import 'dart:convert';
-import 'package:flutter/material.dart';
+import 'package:flutter_contacts/contact.dart';
 import 'package:provider/provider.dart';
-import 'package:test/constants/globals.dart';
-import 'package:test/providers/contact_provider.dart';
-import 'package:test/providers/hotdrop_provider.dart';
-import 'package:test/providers/message_provider.dart';
-import 'package:test/services/connection_services.dart';
-
-int byteCount = 0;
-String sdata = "";
-String fileName = "";
-Stopwatch stopwatch = Stopwatch(); 
+import 'package:test_mobile/constants/globals.dart';
+import 'package:test_mobile/providers/file_detail_provider.dart';
+import 'package:test_mobile/providers/message_provider.dart';
+import 'package:test_mobile/screens/hotdrop_screen.dart';
+import 'package:test_mobile/services/connection_services.dart';
+import 'package:test_mobile/services/file_storage_service.dart';
+import 'package:test_mobile/services/message_storage_service.dart';
 
 class ReceivedDataParser {
-  void parseData(String data, BuildContext context) async {
+  void parseData(String data) {
     var parsedData = jsonDecode(data);
 
     if (parsedData["type"] == "message") {
-      Provider.of<MessageProvider>(navigatorKey.currentContext!, listen: false).addMessage(
-        {
-          "message": parsedData["content"],
-          "sender": "Other",
-        },
-        context
-      );
+      String messageContent = parsedData["content"];
+      Provider.of<MessageProvider>(navigatorKey.currentContext!, listen: false).addMessage(messageContent, false);
+      MessageStorageService().saveMessage(messageContent, false, DateTime.now());
     }
 
-    if (parsedData["type"] == "contacts") {
-      List contacts = [];
+    else if (parsedData["type"] == "downloadComplete") {
+      if (hotdropScreenKey.currentState != null) {
+        HotdopScreenScreenState hotdopScreenScreenState = hotdropScreenKey.currentState!;
+        hotdopScreenScreenState.uploadComplete = true;
+        hotdopScreenScreenState.isUploading = false;
+        hotdopScreenScreenState.updateState(hotdopScreenScreenState.uploadComplete);
 
-      for (var x in parsedData["content"]) {
-        String name = x["displayName"] ?? "Unknown";
-        String id = x["id"] ?? "Unknown";
-        String normalizedNumber = x["normalizedNumber"] ?? "";
-        contacts.add({
-          "name": name,
-          "id": id,
-          "normalizedNumber": normalizedNumber.isNotEmpty ? jsonDecode(normalizedNumber) : null
-        });
+        FileDetailProvider fileDetailProvider = Provider.of<FileDetailProvider>(navigatorKey.currentContext!, listen: false);
+        
+        fileDetailProvider.addFileDetail(
+          fileName: parsedData["name"],
+          fileSize: parsedData["size"],
+          isSent : true,
+          timestamp: DateTime.now(),
+          transferSpeed: parsedData["transfer_speed"]
+        );
       }
-
-      Provider.of<ContactProvider>(navigatorKey.currentContext!, listen: false).replaceContacts(contacts);
-    }
-
-    if (parsedData["type"] == "HotDropFile") {
-      Provider.of<HotdropProvider>(navigatorKey.currentContext!, listen: false).addFile(parsedData);
     }
   }
 
-
 }
 
-
 class OutgoingDataParser {
-  // Message handling
-  void parseMessages(String message, BuildContext context) {
-    Provider.of<MessageProvider>(navigatorKey.currentContext!, listen: false).addMessage(
-      {
-        "message": message,
-        "sender": "Me",
-      },
-      context
+  void parseMessages(String message){
+    Provider.of<MessageProvider>(navigatorKey.currentContext!, listen: false).addMessage(message, true);
+    DartFunction().sendDataToSocket(
+      jsonEncode({
+        "type" : "message", 
+        "format" : "string", 
+        "content" : message
+      })
     );
-    
-    DartFunction().sendMessage(jsonEncode({
-      "type": "message",
-      "format": "string",
-      "content": message
+  }
+
+  Future<void> parseContacts(List<Contact> contacts) async {
+    DartFunction().sendDataToSocket(jsonEncode({
+      "type": "contacts",
+      "format": "list",
+      "content": contacts.map((contact) => {
+        "id": contact.id,
+        "displayName": contact.displayName,
+        "normalizedNumber": contact.phones.isNotEmpty ? jsonEncode(contact.phones[0].normalizedNumber) : null,
+      }).toList(),
     }));
   }
 }

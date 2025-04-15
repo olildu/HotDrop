@@ -1,6 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:ftpconnect/ftpconnect.dart';
 
-int selectedIndex = 0;
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+bool connectedToPort = false;
+Socket? socket;
 
-Map imageData = {};
+List<FTPConnect>? ftpConnections;
