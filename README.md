@@ -1,8 +1,8 @@
-<p align="center">
+<!-- <p align="center">
   <img src="https://raw.githubusercontent.com/olildu/HotDrop/HotDrop-Mobile/assets/images/app_logo/app_logo_transparent.png" 
        alt="HotDrop Logo" 
        width="180">
-</p>
+</p> -->
 
 # 🚀 HotDrop: Cross-Platform P2P File Sharing
 
