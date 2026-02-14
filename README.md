@@ -60,7 +60,7 @@ Requires **Flutter 3.24.x** or higher.
 
 1. **Clone the Repository:**
    ```bash
-   git clone [https://github.com/olildu/HotDrop.git](https://github.com/olildu/HotDrop.git)
+   git clone https://github.com/olildu/HotDrop.git
    cd HotDrop
    ```
 2. **Run Desktop App (Windows)**
