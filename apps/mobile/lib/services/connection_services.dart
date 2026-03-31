@@ -1,150 +1,231 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:developer';
 import 'dart:io';
-import 'dart:developer' as dev;
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart'; // ADDED
 import 'package:flutter/services.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:test_mobile/constants/globals.dart';
-import 'package:test_mobile/screens/main_screen.dart';
+import 'package:test_mobile/screens/main_screen.dart'; // ADDED
 import 'package:test_mobile/services/data_services.dart';
+import 'package:wifi_iot/wifi_iot.dart';
 
 class AndroidFunction {
   static const platform = MethodChannel('com.example.wifi_direct/channel');
 
-  void initialize() {
-    DartFunction().connectToPort("192.168.137.1", 42069);
-    platform.setMethodCallHandler((call) async {
-      if (call.method == "onPeerConnected") {
-        String? deviceIP = call.arguments["deviceIP"];
-        dev.log(deviceIP.toString(), name: "onPeerConnected");
+  Future<Map<String, String>?> startHosting() async {
+    try {
+      final Map<dynamic, dynamic>? creds = await platform.invokeMethod('startLocalOnlyHotspot');
 
-        if (!connectedToPort) {
-          await DartFunction().connectToPort(deviceIP!, 42069);
-          Navigator.of(navigatorKey.currentContext!).pushReplacement(
-            MaterialPageRoute(
-              builder: (context) => const MainScreen(),
-            ),
-          );
+      if (creds != null) {
+        String ssid = creds['ssid'];
+        String password = creds['password'];
+        log("Hotspot Started: $ssid", name: "Host");
+
+        await DartFunction().startServer();
+
+        String hostIp = "192.168.43.1";
+        try {
+          final interfaces = await NetworkInterface.list();
+          for (var interface in interfaces) {
+            for (var addr in interface.addresses) {
+              if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
+                if (addr.address.startsWith('192.168.') || addr.address.startsWith('10.')) {
+                  hostIp = addr.address;
+                }
+              }
+            }
+          }
+        } catch (e) {
+          log("Error finding Host IP: $e", name: "Host");
         }
+
+        return {"ssid": ssid, "password": password, "ip": hostIp};
       }
-    });
-  }
-
-  Future<void> discoverPeers() async {
-    try {
-      await platform.invokeMethod('discoverPeers');
     } on PlatformException catch (e) {
-      dev.log("Failed to discover peers: '${e.message}'.", name: "discoverPeers");
+      log("Failed to start hotspot: '${e.message}'.", name: "Host");
     }
+    return null;
   }
 
-  Future<bool> setTargetDeviceName(String deviceName) async {
-    initialize();
+  Future<Map<String, dynamic>> checkConnectionStatus() async {
+    if (connectedToPort) {
+      return {"connectionStatus": 1, "deviceName": "Connected Device", "deviceIP": "Connected"};
+    }
+    return {"connectionStatus": 0, "deviceName": null, "deviceIP": null};
+  }
+}
+
+class ClientServices {
+  Future<bool> connectToHostHotspot(String ssid, String password, String hostIp, {bool isAuto = false}) async {
     try {
-      final result = await platform.invokeMethod('setTargetDeviceName', {'deviceName': deviceName.toLowerCase()});
-      dev.log("Result: $result", name: "setTargetDeviceName");
+      log("Connecting to Hotspot: $ssid", name: "Client");
 
-      checkConnectionStatus();
+      bool connected = await WiFiForIoTPlugin.connect(
+        ssid,
+        password: password,
+        security: NetworkSecurity.WPA,
+        withInternet: false,
+      );
 
-      return result;
-    } on PlatformException catch (e) {
-      dev.log("Failed to set target device name: ${e.message}", name: "setTargetDeviceName");
+      if (connected) {
+        log("Successfully connected to Hotspot Wi-Fi!", name: "Client");
+        await WiFiForIoTPlugin.forceWifiUsage(true);
+        await Future.delayed(const Duration(seconds: 3));
+
+        log("Connecting to Host IP: $hostIp", name: "Client");
+
+        // Save credentials for future auto-reconnects
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('last_ssid', ssid);
+        await prefs.setString('last_password', password);
+        await prefs.setString('last_host_ip', hostIp);
+
+        await connectToHostSocket(hostIp, isAuto: isAuto);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      log("Error connecting to Wi-Fi: $e", name: "Client");
       return false;
     }
   }
 
-  Future<Map<String, dynamic>> checkConnectionStatus() async {
+  Future<void> connectToHostSocket(String hostIp, {bool isAuto = false}) async {
     try {
-      await platform.invokeMethod("initialize");
-      final connectionInfo = await platform.invokeMethod<Map<dynamic, dynamic>>("checkConnectionStatus");
-      if (connectionInfo != null && connectionInfo["deviceIP"].trim().isNotEmpty) {
-        dev.log("Already connected to device at ${connectionInfo["deviceName"]}", name: "checkConnectionStatus");
+      log("Connecting to TCP Server at $hostIp:42069...", name: "Client");
+      socket = await Socket.connect(hostIp, 42069, timeout: const Duration(seconds: 5));
+      connectedToPort = true;
+      log("Connected to Host Socket!", name: "Client");
 
-        await Future.delayed(const Duration(seconds: 2));
-        return {"connectionStatus" : 1, "deviceName" : connectionInfo["deviceName"], "deviceIP" : connectionInfo["deviceIP"],};
-      } else {
-        dev.log("No device connected", name: "checkConnectionStatus");
-        await Future.delayed(const Duration(seconds: 2));
-        return {"connectionStatus" : 1, "deviceName" : null, "deviceIP" : null,};
+      if (navigatorKey.currentState != null) {
+        Future.delayed(const Duration(milliseconds: 100), () {
+          navigatorKey.currentState!.pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => const MainScreen()),
+            (route) => false,
+          );
+        });
+      }
+
+      socket!.listen(
+        (data) {
+          final message = String.fromCharCodes(data).trim();
+          log('Received: $message', name: "Client");
+          ReceivedDataParser().parseData(message);
+        },
+        onError: (e) {
+          log("Socket Error: $e", name: "Client");
+          connectedToPort = false;
+        },
+        onDone: () {
+          log("Socket closed by host", name: "Client");
+          connectedToPort = false;
+        },
+      );
+    } catch (e) {
+      log('Error connecting to socket: $e', name: "Client");
+    }
+  }
+
+  // --- NEW: Auto Reconnect Function ---
+  Future<bool> tryAutoReconnect() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      String? ssid = prefs.getString('last_ssid');
+      String? password = prefs.getString('last_password');
+      String? hostIp = prefs.getString('last_host_ip');
+
+      if (ssid != null && password != null && hostIp != null) {
+        log("Found previous session, attempting auto-reconnect...", name: "Client");
+        return await connectToHostHotspot(ssid, password, hostIp, isAuto: true);
       }
     } catch (e) {
-        dev.log("Failed to check connection status: $e", name: "checkConnectionStatus");
-        await Future.delayed(const Duration(seconds: 2));
-        return {"connectionStatus" : -1, "deviceName" : null, "deviceIP" : null,};
-    } 
+      log("Auto-reconnect failed: $e", name: "Client");
+    }
+    return false;
   }
 }
 
-class Permissions{
+class Permissions {
   Future<void> requestPermissions() async {
     await [
       Permission.location,
-      Permission.locationWhenInUse,
       Permission.nearbyWifiDevices,
+      Permission.bluetooth,
+      Permission.bluetoothScan,
+      Permission.bluetoothAdvertise,
+      Permission.bluetoothConnect,
       Permission.storage,
-      Permission.contacts
+      Permission.manageExternalStorage,
+      Permission.contacts,
+      Permission.camera,
     ].request();
   }
 }
 
 class DartFunction {
-  // Connect to the port and initialize the socket
-  Future<void> connectToPort(String ipAddress, int port) async {
-    try {
-      dev.log(socket.toString(), name: "connectToPort");
-      socket = await Socket.connect(ipAddress, port);
-      dev.log("Connected to $ipAddress on port $port", name: "connectToPort");
-      connectedToPort = true;
+  ServerSocket? _serverSocket;
 
+  Future<void> startServer({int port = 42069}) async {
+    try {
+      _serverSocket = await ServerSocket.bind(InternetAddress.anyIPv4, port);
+      log("TCP Server listening on port $port", name: "Server");
+
+      _serverSocket!.listen((client) {
+        log("New connection from ${client.remoteAddress.address}", name: "Server");
+        handleClient(client);
+      });
+    } catch (e) {
+      log("Error starting server: $e", name: "Server");
+    }
+  }
+
+  void handleClient(Socket client) {
+    socket = client;
+    connectedToPort = true;
+
+    // NEW: Force the Host's UI to refresh to the Main Screen, closing the QR code!
+    navigatorKey.currentState?.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => const MainScreen()),
+      (route) => false,
+    );
+
+    _sendInitData();
+
+    socket!.listen(
+      (data) {
+        final message = String.fromCharCodes(data).trim();
+        log('Received: $message', name: "Server");
+        ReceivedDataParser().parseData(message);
+      },
+      onError: (e) {
+        log("Socket Error: $e", name: "Server");
+        connectedToPort = false;
+      },
+      onDone: () {
+        log("Client disconnected", name: "Server");
+        connectedToPort = false;
+      },
+    );
+  }
+
+  Future<void> _sendInitData() async {
+    if (await FlutterContacts.requestPermission()) {
       List<Contact> contacts = await FlutterContacts.getContacts(withProperties: true, withThumbnail: true);
       OutgoingDataParser().parseContacts(contacts);
-
-      dev.log(socket.toString(), name: "connectToPort");
-
-      socket!.listen(
-        (data) {
-          // Handle incoming data here
-          final message = String.fromCharCodes(data).trim();
-          dev.log('Received message from client: $message', name: "connectToPort");
-          ReceivedDataParser().parseData(message);
-        },
-        onError: (error) {
-          dev.log("Socket error: $error", name: "connectToPort");
-          connectedToPort = false; // Mark as disconnected if error occurs
-        },
-        onDone: () {
-          dev.log("Socket closed", name: "connectToPort");
-          connectedToPort = false; // Mark as disconnected when the socket closes
-        },
-      );
-    } catch (e) {
-      dev.log("Error connecting to $ipAddress on port $port: $e", name: "connectToPort");
-      connectedToPort = false;
     }
   }
 
-  // Send a message if connected
   Future<void> sendDataToSocket(String message) async {
     if (socket != null) {
-      socket!.write(message);
-      dev.log("Sent message: $message", name: "sendDataToSocket");
-    } else {  
-      dev.log("Cannot send message: Not connected to any socket.", name: "sendDataToSocket");
+      try {
+        socket!.write('$message\n');
+        log("Sent: $message", name: "Socket");
+      } catch (e) {
+        log("Send Error: $e", name: "Socket");
+      }
     }
-  }
-
-  Future<void> sendBigDataToSocket(String message) async {
-    if (socket != null) {
-      socket!.write(message);
-    } else {
-      dev.log("Cannot send message: Not connected to any socket.", name: "sendBigDataToSocket");
-    }
-  }
-
-  // Close the socket connection when done
-  void closeConnection() {
-    socket?.close();
-    dev.log("Socket closed manually.", name: "closeConnection");
-    connectedToPort = false;
   }
 }
