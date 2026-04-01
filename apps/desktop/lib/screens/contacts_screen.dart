@@ -50,11 +50,11 @@ class _ContactScreenState extends State<ContactScreen> {
 
     if (name.isEmpty || number.isEmpty) return;
 
-    final newContact = {
-      "name": name,
-      "normalizedNumber": number,
-      "imagePath": pickedFile?.path,
-    };
+    // final newContact = {
+    //   "name": name,
+    //   "normalizedNumber": number,
+    //   "imagePath": pickedFile?.path,
+    // };
 
     // context.read<ContactProvider>().addContact(newContact);
 

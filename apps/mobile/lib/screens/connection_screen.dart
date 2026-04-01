@@ -37,28 +37,43 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
   }
 
   void _onDetectQR(BarcodeCapture capture) async {
-    if (_isConnecting) return; 
-    
+    if (_isConnecting) return;
+
     final List<Barcode> barcodes = capture.barcodes;
     for (final barcode in barcodes) {
       if (barcode.rawValue != null) {
         setState(() => _isConnecting = true);
         try {
           final creds = jsonDecode(barcode.rawValue!);
-          String ssid = creds['ssid'];
-          String pass = creds['password'];
-          // Fallback just in case, but it will use the IP from the QR
-          String hostIp = creds['ip'] ?? "192.168.43.1"; 
 
-          bool connected = await ClientServices().connectToHostHotspot(ssid, pass, hostIp);
-          if (connected && mounted) {
-            Navigator.pop(context); // Go back to MainScreen, connection successful
-          } else {
-            setState(() => _isConnecting = false);
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Connection Failed")));
+          // Check if connecting to Linux Desktop
+          if (creds['isDesktop'] == true) {
+            String hostIp = creds['ip'];
+
+            // Connect directly to the IP without setting up a WiFi Hotspot
+            await ClientServices().connectToHostSocket(hostIp);
+
+            if (mounted) {
+              Navigator.pop(context); // Go back after connection
+            }
+          }
+          // Check if connecting to Android Mobile
+          else {
+            String ssid = creds['ssid'];
+            String pass = creds['password'];
+            String hostIp = creds['ip'] ?? "192.168.43.1";
+
+            bool connected = await ClientServices().connectToHostHotspot(ssid, pass, hostIp);
+            if (connected && mounted) {
+              Navigator.pop(context); // Go back after connection
+            } else {
+              setState(() => _isConnecting = false);
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Connection Failed")));
+            }
           }
         } catch (e) {
           setState(() => _isConnecting = false);
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Invalid QR Code: $e")));
         }
         break;
       }
@@ -116,6 +131,19 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
             ] else if (_isReceiving) ...[
               Text(_isConnecting ? "Connecting..." : "Scan Host's QR Code", style: GoogleFonts.poppins(color: Colors.white, fontSize: 16.sp)),
               Gap(20.h),
+              if (!_isConnecting)
+                Padding(
+                  padding: EdgeInsets.only(bottom: 20.h),
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      setState(() => _isConnecting = true);
+                      await ClientServices().connectToHostSocket("10.0.2.2");
+                      if (mounted) Navigator.pop(context);
+                    },
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                    child: const Text("DEBUG: Connect to Emulator Host (10.0.2.2)"),
+                  ),
+                ),
               SizedBox(
                 height: 300.h,
                 width: 300.w,
@@ -126,10 +154,7 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
                   ),
                 ),
               ),
-              if (_isConnecting) ...[
-                Gap(20.h),
-                const CircularProgressIndicator(color: Colors.white)
-              ]
+              if (_isConnecting) ...[Gap(20.h), const CircularProgressIndicator(color: Colors.white)]
             ]
           ],
         ),

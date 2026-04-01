@@ -5,7 +5,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 class FileStorageService {
   static const _messagesKey = 'file_storage_details';
 
-  Future<void> saveFileDetails({required String fileName, required int fileSize, required DateTime timestamp, required double transferSpeed, required bool isSent}) async {
+  Future<void> saveFileDetails({
+    required String fileName,
+    required int fileSize,
+    required DateTime timestamp,
+    required double transferSpeed,
+    required bool isSent,
+    String? filePath,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     final existingMessages = await loadFileDetails();
 
@@ -15,6 +22,7 @@ class FileStorageService {
       'timestamp': timestamp.toIso8601String(),
       "is_sent": isSent,
       "transfer_speed": transferSpeed,
+      "file_path": filePath,
     });
 
     final jsonString = jsonEncode(existingMessages);

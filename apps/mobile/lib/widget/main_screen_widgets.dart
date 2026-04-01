@@ -7,6 +7,7 @@ import 'package:test_mobile/providers/file_detail_provider.dart';
 import 'package:test_mobile/screens/connection_screen.dart';
 import 'package:test_mobile/screens/hotdrop_screen.dart';
 import 'package:test_mobile/screens/messaging_screen.dart';
+import 'package:test_mobile/screens/shared_files_screen.dart';
 
 Widget detailWidgets(BuildContext context, double squareSize, int index, Map<String, dynamic> data) {
   return Container(
@@ -35,9 +36,7 @@ Widget detailWidgets(BuildContext context, double squareSize, int index, Map<Str
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(
-                    data["connectionStatus"] == 1
-                        ? Icons.laptop_rounded
-                        : Icons.wifi_tethering_off_outlined,
+                    data["connectionStatus"] == 1 ? Icons.laptop_rounded : Icons.wifi_tethering_off_outlined,
                     size: 90.sp,
                     color: const Color(0xFF49454F),
                   ),
@@ -104,13 +103,9 @@ Widget detailWidgets(BuildContext context, double squareSize, int index, Map<Str
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text("Avg Speed", style: GoogleFonts.poppins(fontSize: 13.sp, color: Colors.white)),
-                            
                             Consumer<FileDetailProvider>(
-                              builder: (context, fileService, _) => Text(
-                                "${fileService.getDataStats()["average_transfer_speed"] ?? '0 MB'}/s", 
-                                style: GoogleFonts.poppins(fontSize: 13.sp, color: Colors.white)
-                              )
-                            ),
+                                builder: (context, fileService, _) =>
+                                    Text("${fileService.getDataStats()["average_transfer_speed"] ?? '0 MB'}/s", style: GoogleFonts.poppins(fontSize: 13.sp, color: Colors.white))),
                           ],
                         )
                       ],
@@ -151,23 +146,30 @@ Widget detailWidgets(BuildContext context, double squareSize, int index, Map<Str
                 Gap(8.h),
                 Expanded(
                   flex: 3,
-                  child: Container(
-                    padding: EdgeInsets.symmetric(horizontal: 12.w),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF49454F),
-                      borderRadius: BorderRadius.circular(12.sp),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.article_rounded, size: 28.sp, color: Colors.white),
-                        Gap(10.w),
-                        Consumer<FileDetailProvider>(
-                          builder: (context, fileDetails, _) => Text(
-                            "${fileDetails.files.length} Files Shared",
-                            style: GoogleFonts.poppins(fontSize: 13.sp, color: Colors.white),
-                          ),
-                        )
-                      ],
+                  child: GestureDetector(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (context) => const SharedFilesScreen()),
+                      );
+                    },
+                    child: Container(
+                      padding: EdgeInsets.symmetric(horizontal: 12.w),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF49454F),
+                        borderRadius: BorderRadius.circular(12.sp),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.article_rounded, size: 28.sp, color: Colors.white),
+                          Gap(10.w),
+                          Consumer<FileDetailProvider>(
+                            builder: (context, fileDetails, _) => Text(
+                              "${fileDetails.files.length} Files Shared",
+                              style: GoogleFonts.poppins(fontSize: 13.sp, color: Colors.white),
+                            ),
+                          )
+                        ],
+                      ),
                     ),
                   ),
                 ),

@@ -1,10 +1,15 @@
+import 'dart:convert';
 import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:gap/gap.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:provider/provider.dart';
+import 'package:test/constants/globals.dart' as globals;
 import 'package:test/providers/hotdrop_provider.dart';
+import 'package:test/services/connection_services.dart';
+import 'package:test/services/file_server_service.dart';
 import 'package:test/utils/common/search_bar.dart';
 
 class HotdropScreen extends StatefulWidget {
@@ -16,6 +21,31 @@ class HotdropScreen extends StatefulWidget {
 
 class _HotdropScreenState extends State<HotdropScreen> {
   String searchQuery = '';
+
+  Future<void> _pickAndSendFile() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles();
+
+    if (result != null && result.files.single.path != null) {
+      File file = File(result.files.single.path!); // Get the file object
+      String filePath = result.files.single.path!;
+      String fileName = result.files.single.name;
+      int fileSize = await file.length(); // Get the size in bytes
+
+      if (globals.currentServerIp == null) return;
+
+      String? fileUrl = await FileServerService().startFileServer(filePath, globals.currentServerIp!);
+
+      if (fileUrl != null) {
+        // Add the "size" key to the JSON
+        await DartFunction().sendMessage(jsonEncode({
+          "type": "HotDropFile",
+          "name": fileName,
+          "size": fileSize, // Now sending the size
+          "url": fileUrl,
+        }));
+      }
+    }
+  }
 
   IconData _getFileIcon(String fileName) {
     final extension = fileName.split('.').last.toLowerCase();
@@ -83,6 +113,12 @@ class _HotdropScreenState extends State<HotdropScreen> {
           ),
           child: AppBar(
             backgroundColor: Colors.white,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.upload_file),
+                onPressed: () => _pickAndSendFile(),
+              ),
+            ],
             title: SizedBox(
               child: Row(
                 mainAxisSize: MainAxisSize.min,

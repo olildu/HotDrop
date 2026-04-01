@@ -44,7 +44,6 @@ class _AddContactFormState extends State<AddContactForm> {
     });
   }
 
-
   @override
   void dispose() {
     widget.nameController.removeListener(_validateInputs);
@@ -62,17 +61,17 @@ class _AddContactFormState extends State<AddContactForm> {
           children: [
             GestureDetector(
               onTap: () async {
-                final picker = ImagePickerWindows();
-                final file = await picker.getImage(source: ImageSource.gallery);
-                widget.onImagePick(file);
+                final ImagePicker picker = ImagePicker();
+                final XFile? file = await picker.pickImage(source: ImageSource.gallery);
+                if (file != null) {
+                  widget.onImagePick(file);
+                }
               },
               child: CircleAvatar(
                 radius: 60.r,
                 backgroundColor: const Color(0xFFEFEFEF),
                 backgroundImage: widget.pickedFile != null ? FileImage(File(widget.pickedFile!.path)) : null,
-                child: widget.pickedFile == null
-                    ? Icon(Icons.add_rounded, size: 40.sp, color: Colors.grey)
-                    : null,
+                child: widget.pickedFile == null ? Icon(Icons.add_rounded, size: 40.sp, color: Colors.grey) : null,
               ),
             ),
             Gap(30.h),

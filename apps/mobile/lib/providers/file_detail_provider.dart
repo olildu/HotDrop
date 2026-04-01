@@ -7,27 +7,35 @@ class FileDetailProvider with ChangeNotifier {
 
   List<Map> get files => _files;
 
-
   int _lastFileCount = -1;
   Map<String, String>? _cachedStats;
 
-  void addFileDetail({required String fileName, required int fileSize, required DateTime timestamp, required double transferSpeed, required bool isSent}) {
+  void addFileDetail({
+    required String fileName,
+    required int fileSize,
+    required DateTime timestamp,
+    required double transferSpeed,
+    required bool isSent,
+    String? filePath,
+  }) {
     _files.add({
       'file_name': fileName,
       'file_size': fileSize,
       'timestamp': timestamp.toIso8601String(),
       "is_sent": isSent,
       "transfer_speed": transferSpeed,
+      "file_path": filePath,
     });
 
     log('File added: $fileName to provider', name: 'FileDetailProvider');
 
     FileStorageService().saveFileDetails(
       fileName: fileName,
-      fileSize: fileSize, 
+      fileSize: fileSize,
       timestamp: timestamp,
       isSent: isSent,
       transferSpeed: transferSpeed,
+      filePath: filePath,
     );
 
     notifyListeners();
@@ -44,7 +52,6 @@ class FileDetailProvider with ChangeNotifier {
       return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
     }
   }
-
 
   Map<String, String> getDataStats() {
     if (_files.length == _lastFileCount && _cachedStats != null) {
@@ -69,8 +76,6 @@ class FileDetailProvider with ChangeNotifier {
 
     return _cachedStats!;
   }
-
-
 
   void loadFileDetails() {
     FileStorageService().loadFileDetails().then((fileDetails) {

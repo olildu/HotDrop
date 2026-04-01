@@ -206,7 +206,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
         // Send the file
         int bytesSent = 0;
-        final chunkSize = 1024 * 16; // 16KB chunks
+        const chunkSize = 1024 * 16; // 16KB chunks
         
         for (var i = 0; i < fullData.length; i += chunkSize) {
           final end = (i + chunkSize < fullData.length) ? i + chunkSize : fullData.length;
