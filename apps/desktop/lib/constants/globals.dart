@@ -5,3 +5,6 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Map imageData = {};
 String? currentServerIp;
+
+bool isHotspotActive = false;
+String? activeHotspotSsid;

@@ -131,19 +131,6 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
             ] else if (_isReceiving) ...[
               Text(_isConnecting ? "Connecting..." : "Scan Host's QR Code", style: GoogleFonts.poppins(color: Colors.white, fontSize: 16.sp)),
               Gap(20.h),
-              if (!_isConnecting)
-                Padding(
-                  padding: EdgeInsets.only(bottom: 20.h),
-                  child: ElevatedButton(
-                    onPressed: () async {
-                      setState(() => _isConnecting = true);
-                      await ClientServices().connectToHostSocket("10.0.2.2");
-                      if (mounted) Navigator.pop(context);
-                    },
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-                    child: const Text("DEBUG: Connect to Emulator Host (10.0.2.2)"),
-                  ),
-                ),
               SizedBox(
                 height: 300.h,
                 width: 300.w,

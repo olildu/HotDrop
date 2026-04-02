@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:test_mobile/constants/globals.dart';
 import 'package:test_mobile/screens/main_screen.dart'; // ADDED
 import 'package:test_mobile/services/data_services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:wifi_iot/wifi_iot.dart';
 
 class AndroidFunction {
@@ -60,21 +61,21 @@ class AndroidFunction {
 class ClientServices {
   Future<bool> connectToHostHotspot(String ssid, String password, String hostIp, {bool isAuto = false}) async {
     try {
-      log("Connecting to Hotspot: $ssid", name: "Client");
+      log("Attempting to connect to Hotspot: $ssid", name: "Client");
 
+      // 1. Attempt programmatic connection (Optimized for Android 10+)
       bool connected = await WiFiForIoTPlugin.connect(
         ssid,
         password: password,
         security: NetworkSecurity.WPA,
         withInternet: false,
+        joinOnce: true, // CRITICAL: Forces the Android 10+ connection dialog
       );
 
       if (connected) {
-        log("Successfully connected to Hotspot Wi-Fi!", name: "Client");
+        log("Successfully connected to Hotspot Wi-Fi programmatically!", name: "Client");
         await WiFiForIoTPlugin.forceWifiUsage(true);
-        await Future.delayed(const Duration(seconds: 3));
-
-        log("Connecting to Host IP: $hostIp", name: "Client");
+        await Future.delayed(const Duration(seconds: 4)); // Wait for DHCP
 
         // Save credentials for future auto-reconnects
         final prefs = await SharedPreferences.getInstance();
@@ -82,17 +83,70 @@ class ClientServices {
         await prefs.setString('last_password', password);
         await prefs.setString('last_host_ip', hostIp);
 
-        await connectToHostSocket(hostIp, isAuto: isAuto);
-        return true;
+        return await connectToHostSocket(hostIp, isAuto: isAuto);
+      } else {
+        // 2. ULTIMATE FALLBACK: Polling for manual connection
+        log("Programmatic connection blocked by Android OS. Triggering manual fallback.", name: "Client");
+
+        if (navigatorKey.currentContext != null) {
+          // Copy password to clipboard
+          await Clipboard.setData(ClipboardData(text: password));
+
+          ScaffoldMessenger.of(navigatorKey.currentContext!).showSnackBar(
+            SnackBar(
+              content: Text("Auto-connect blocked. Password '$password' copied!\n\nPlease open your Wi-Fi settings and connect to '$ssid'."),
+              duration: const Duration(seconds: 10), // Give user time to read
+            ),
+          );
+        }
+
+        // 3. SMART POLLING: Wait until the user actually connects to the correct Wi-Fi
+        bool userConnectedManually = false;
+        log("Waiting for user to connect manually to $ssid...", name: "Client");
+
+        for (int i = 0; i < 30; i++) {
+          // Poll for up to 30 seconds
+          await Future.delayed(const Duration(seconds: 1));
+
+          String? currentSsid = await WiFiForIoTPlugin.getSSID();
+          // Clean up quotes that Android sometimes adds around SSIDs
+          String cleanSsid = currentSsid?.replaceAll('"', '') ?? '';
+
+          if (cleanSsid == ssid) {
+            userConnectedManually = true;
+            break;
+          }
+        }
+
+        if (userConnectedManually) {
+          log("User successfully connected manually!", name: "Client");
+          // Give Android 3 seconds to assign an IP address via DHCP
+          await Future.delayed(const Duration(seconds: 3));
+
+          // Save credentials for future auto-reconnects
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('last_ssid', ssid);
+          await prefs.setString('last_password', password);
+          await prefs.setString('last_host_ip', hostIp);
+
+          return await connectToHostSocket(hostIp, isAuto: isAuto);
+        } else {
+          log("Timeout: User did not connect to the Hotspot within 30 seconds.", name: "Client");
+          if (navigatorKey.currentContext != null) {
+            ScaffoldMessenger.of(navigatorKey.currentContext!).showSnackBar(
+              const SnackBar(content: Text("Connection timeout. Please try scanning again.")),
+            );
+          }
+          return false;
+        }
       }
-      return false;
     } catch (e) {
       log("Error connecting to Wi-Fi: $e", name: "Client");
       return false;
     }
   }
 
-  Future<void> connectToHostSocket(String hostIp, {bool isAuto = false}) async {
+  Future<bool> connectToHostSocket(String hostIp, {bool isAuto = false}) async {
     try {
       log("Connecting to TCP Server at $hostIp:42069...", name: "Client");
       socket = await Socket.connect(hostIp, 42069, timeout: const Duration(seconds: 5));
@@ -123,8 +177,11 @@ class ClientServices {
           connectedToPort = false;
         },
       );
+
+      return true;
     } catch (e) {
       log('Error connecting to socket: $e', name: "Client");
+      return false; 
     }
   }
 

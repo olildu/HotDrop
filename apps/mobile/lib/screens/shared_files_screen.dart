@@ -5,7 +5,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:gap/gap.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:open_filex/open_filex.dart'; // ✅ changed
+import 'package:open_filex/open_filex.dart';
 import 'package:provider/provider.dart';
 import 'package:test_mobile/providers/file_detail_provider.dart';
 
@@ -55,7 +55,7 @@ class SharedFilesScreen extends StatelessWidget {
                   final String? filePath = file["file_path"];
 
                   if (filePath != null && await File(filePath).exists()) {
-                    final result = await OpenFilex.open(filePath); // ✅ changed
+                    final result = await OpenFilex.open(filePath);
 
                     if (result.type != ResultType.done) {
                       ScaffoldMessenger.of(context).showSnackBar(

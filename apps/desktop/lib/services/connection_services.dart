@@ -1,7 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:test/constants/globals.dart' as globals;
 import 'package:test/screens/main_screen.dart';
 import 'package:test/services/data_services.dart';
+
 Socket? socket;
 ServerSocket? server;
 
@@ -71,6 +73,41 @@ class DartFunction {
 
   bool isConnected() {
     return socket != null;
+  }
+}
+
+void shutdownHotspotSync() {
+  if (!globals.isHotspotActive) return;
+
+  print("Shutting down Mobile Hotspot...");
+
+  if (Platform.isWindows) {
+    const psScript = '''
+      \$ErrorActionPreference = 'SilentlyContinue'
+      Add-Type -AssemblyName System.Runtime.WindowsRuntime
+      
+      \$asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | ? { 
+          \$_.Name -eq 'AsTask' -and \$_.GetParameters().Count -eq 1 -and \$_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' 
+      })[0]
+      
+      Function Await(\$WinRtTask, \$ResultType) {
+          \$asTask = \$asTaskGeneric.MakeGenericMethod(\$ResultType)
+          \$netTask = \$asTask.Invoke(\$null, @(\$WinRtTask))
+          \$netTask.Wait(-1) | Out-Null
+      }
+
+      \$connectionProfile = [Windows.Networking.Connectivity.NetworkInformation,Windows.Networking.Connectivity,ContentType=WindowsRuntime]::GetInternetConnectionProfile()
+      
+      if (\$null -ne \$connectionProfile) {
+          \$tetheringManager = [Windows.Networking.NetworkOperators.NetworkOperatorTetheringManager,Windows.Networking.NetworkOperators,ContentType=WindowsRuntime]::CreateFromConnectionProfile(\$connectionProfile)
+          Await (\$tetheringManager.StopTetheringAsync()) ([Windows.Networking.NetworkOperators.NetworkOperatorTetheringOperationResult])
+      }
+    ''';
+    Process.runSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', psScript]);
+  } else if (Platform.isLinux && globals.activeHotspotSsid != null) {
+    // Bring down the connection and delete the temporary profile
+    Process.runSync('nmcli', ['connection', 'down', globals.activeHotspotSsid!]);
+    Process.runSync('nmcli', ['connection', 'delete', globals.activeHotspotSsid!]);
   }
 }
 
