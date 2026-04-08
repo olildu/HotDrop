@@ -116,7 +116,7 @@ class MessagingScreenState extends State<MessagingScreen> {
                   focusNode: FocusNode(),
                   onKeyEvent: (event) {
                     if (event.logicalKey == LogicalKeyboardKey.enter) {
-                      OutgoingDataParser().parseMessages(_messageController.text, context);
+                      OutgoingDataParser().parseMessages(_messageController.text);
     
                       setState(() {
                         if (_messageController.text.isNotEmpty) {
@@ -142,7 +142,7 @@ class MessagingScreenState extends State<MessagingScreen> {
               IconButton(
                 icon: Icon(Icons.send, color: Theme.of(context).primaryColor),
                 onPressed: () {
-                  OutgoingDataParser().parseMessages(_messageController.text, context);
+                  OutgoingDataParser().parseMessages(_messageController.text);
     
                   setState(() {
                     if (_messageController.text.isNotEmpty) {

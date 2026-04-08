@@ -1,8 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:test/constants/globals.dart' as globals;
-import 'package:test/screens/main_screen.dart';
-import 'package:test/services/data_services.dart';
+
+import '../constants/globals.dart' as globals;
+import '../screens/main_screen.dart';
+import 'data_services.dart';
 
 Socket? socket;
 ServerSocket? server;
@@ -20,16 +21,17 @@ class DartFunction {
 
         socket = client;
 
-        Navigator.pushAndRemoveUntil(
-          context!,
-          MaterialPageRoute(builder: (context) => const MainScreen()),
-          (Route<dynamic> route) => false,
-        );
+        Navigator.pushAndRemoveUntil(context!, MaterialPageRoute(builder: (context) => const MainScreen()), (Route<dynamic> route) => false);
 
         client.listen(
           (data) {
-            final message = String.fromCharCodes(data).trim();
-            ReceivedDataParser().parseData(message, context);
+            final rawString = String.fromCharCodes(data);
+            final messages = rawString.split('\n'); // Split TCP chunks safely
+            for (var msg in messages) {
+              if (msg.trim().isNotEmpty) {
+                ReceivedDataParser().parseData(msg.trim());
+              }
+            }
           },
           onError: (error) {
             print('Error: $error');
@@ -51,6 +53,30 @@ class DartFunction {
     print("Closing port manually");
     socket?.close();
     server?.close();
+  }
+
+  void _navigateToMain(BuildContext context) {
+    Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const MainScreen()), (r) => false);
+  }
+
+  Future<void> connectToHost(String ip, {BuildContext? context}) async {
+    try {
+      socket = await Socket.connect(ip, 42069, timeout: const Duration(seconds: 10));
+      socket!.setOption(SocketOption.tcpNoDelay, true);
+      _navigateToMain(context!);
+
+      socket!.listen((data) {
+        final rawString = String.fromCharCodes(data);
+        final messages = rawString.split('\n'); // Split TCP chunks safely
+        for (var msg in messages) {
+          if (msg.trim().isNotEmpty) {
+            ReceivedDataParser().parseData(msg.trim());
+          }
+        }
+      });
+    } catch (e) {
+      rethrow;
+    }
   }
 
   Future<bool> sendMessage(String message) async {
@@ -108,6 +134,55 @@ void shutdownHotspotSync() {
     // Bring down the connection and delete the temporary profile
     Process.runSync('nmcli', ['connection', 'down', globals.activeHotspotSsid!]);
     Process.runSync('nmcli', ['connection', 'delete', globals.activeHotspotSsid!]);
+  }
+}
+
+Future<void> hardCleanupOnStartup() async {
+  print("Performing hard cleanup on startup...");
+  try {
+    if (Platform.isWindows) {
+      // 1. Force kill any ghost BLE processes from previous crashes by image name
+      Process.runSync('taskkill', ['/F', '/IM', 'HotDropBLE.exe', '/T']);
+
+      // 2. Force shutdown Windows Hotspot unconditionally
+      const psScript = '''
+        \$ErrorActionPreference = 'SilentlyContinue'
+        Add-Type -AssemblyName System.Runtime.WindowsRuntime
+        
+        \$asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | ? { 
+            \$_.Name -eq 'AsTask' -and \$_.GetParameters().Count -eq 1 -and \$_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' 
+        })[0]
+        
+        Function Await(\$WinRtTask, \$ResultType) {
+            \$asTask = \$asTaskGeneric.MakeGenericMethod(\$ResultType)
+            \$netTask = \$asTask.Invoke(\$null, @(\$WinRtTask))
+            \$netTask.Wait(-1) | Out-Null
+        }
+
+        \$connectionProfile = [Windows.Networking.Connectivity.NetworkInformation,Windows.Networking.Connectivity,ContentType=WindowsRuntime]::GetInternetConnectionProfile()
+        
+        if (\$null -ne \$connectionProfile) {
+            \$tetheringManager = [Windows.Networking.NetworkOperators.NetworkOperatorTetheringManager,Windows.Networking.NetworkOperators,ContentType=WindowsRuntime]::CreateFromConnectionProfile(\$connectionProfile)
+            Await (\$tetheringManager.StopTetheringAsync()) ([Windows.Networking.NetworkOperators.NetworkOperatorTetheringOperationResult])
+        }
+      ''';
+      Process.runSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', psScript]);
+    } else if (Platform.isLinux) {
+      // 1. Force kill any ghost BLE processes on Linux
+      Process.runSync('pkill', ['-f', 'HotDropBLE']);
+
+      // 2. Find and delete any leftover HotDrop connections in NetworkManager
+      final result = Process.runSync('nmcli', ['-t', '-f', 'NAME', 'connection', 'show']);
+      final lines = result.stdout.toString().split('\n');
+      for (var line in lines) {
+        if (line.trim().startsWith('HotDrop_')) {
+          Process.runSync('nmcli', ['connection', 'down', line.trim()]);
+          Process.runSync('nmcli', ['connection', 'delete', line.trim()]);
+        }
+      }
+    }
+  } catch (e) {
+    print("Startup cleanup encountered an error (safe to ignore): $e");
   }
 }
 

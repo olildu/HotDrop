@@ -1,16 +1,16 @@
 import 'dart:async';
 import 'dart:developer';
 import 'dart:io';
-import 'package:flutter/material.dart'; // ADDED
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:test_mobile/constants/globals.dart';
-import 'package:test_mobile/screens/main_screen.dart'; // ADDED
+import 'package:test_mobile/screens/main_screen.dart';
 import 'package:test_mobile/services/data_services.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:wifi_iot/wifi_iot.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 
 class AndroidFunction {
   static const platform = MethodChannel('com.example.wifi_direct/channel');
@@ -181,7 +181,7 @@ class ClientServices {
       return true;
     } catch (e) {
       log('Error connecting to socket: $e', name: "Client");
-      return false; 
+      return false;
     }
   }
 
@@ -206,18 +206,76 @@ class ClientServices {
 
 class Permissions {
   Future<void> requestPermissions() async {
-    await [
-      Permission.location,
-      Permission.nearbyWifiDevices,
-      Permission.bluetooth,
-      Permission.bluetoothScan,
-      Permission.bluetoothAdvertise,
-      Permission.bluetoothConnect,
-      Permission.storage,
-      Permission.manageExternalStorage,
+    // 1. Base permissions that don't change based on Android versions
+    List<Permission> permissions = [
+      Permission.location, // Note: You have coarse and fine in manifest
       Permission.contacts,
       Permission.camera,
-    ].request();
+    ];
+
+    // 2. Android-specific logic
+    if (Platform.isAndroid) {
+      final androidInfo = await DeviceInfoPlugin().androidInfo;
+      final sdkInt = androidInfo.version.sdkInt;
+
+      // --- BLUETOOTH & WIFI LOGIC ---
+      if (sdkInt >= 31) {
+        // Android 12+ (API 31+) uses the new Bluetooth & Wifi permissions
+        permissions.addAll([
+          Permission.bluetoothScan,
+          Permission.bluetoothAdvertise,
+          Permission.bluetoothConnect,
+          Permission.nearbyWifiDevices,
+        ]);
+      } else {
+        // Android 11 and below (API 30 and below) uses the legacy Bluetooth permission
+        permissions.add(Permission.bluetooth);
+      }
+
+      // --- STORAGE LOGIC ---
+      // Note: If you truly need manageExternalStorage, you MUST add 
+      // <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>
+      // to your AndroidManifest.xml. If you just need standard files, remove it entirely.
+      if (sdkInt < 33) {
+        // Android 12 and below use standard storage
+        permissions.add(Permission.storage);
+      } else {
+        // On Android 13+, Permission.storage is ignored. You must request 
+        // Permission.photos, Permission.videos, or Permission.audio depending on your needs.
+        // Or if you are keeping manageExternalStorage, add it here:
+        // permissions.add(Permission.manageExternalStorage); 
+      }
+    }
+
+    // 3. Request the dynamically built list
+    await permissions.request();
+  }
+
+  Future<void> ensureBlePermissions() async {
+    bool isGranted = true;
+
+    if (Platform.isAndroid) {
+      final androidInfo = await DeviceInfoPlugin().androidInfo;
+      
+      if (androidInfo.version.sdkInt >= 31) {
+        // Android 12+ requires Scan and Connect
+        final scan = await Permission.bluetoothScan.request();
+        final connect = await Permission.bluetoothConnect.request();
+        if (scan != PermissionStatus.granted || connect != PermissionStatus.granted) {
+          isGranted = false;
+        }
+      } else {
+        // Android 11 and below requires Location to scan for BLE devices
+        final location = await Permission.location.request();
+        if (location != PermissionStatus.granted) {
+          isGranted = false;
+        }
+      }
+    }
+
+    if (!isGranted) {
+      throw Exception("BLE permissions not granted");
+    }
   }
 }
 
@@ -242,7 +300,7 @@ class DartFunction {
     socket = client;
     connectedToPort = true;
 
-    // NEW: Force the Host's UI to refresh to the Main Screen, closing the QR code!
+    // Force the Host's UI to refresh to the Main Screen, closing the QR code
     navigatorKey.currentState?.pushAndRemoveUntil(
       MaterialPageRoute(builder: (context) => const MainScreen()),
       (route) => false,

@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -8,10 +9,12 @@ import 'package:test/providers/hotdrop_provider.dart';
 import 'package:test/providers/message_provider.dart';
 import 'package:test/providers/popup_provider.dart';
 import 'package:test/screens/connection_screen.dart';
+import 'package:test/services/connection_services.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // await DartFunction().openPort();
+  await hardCleanupOnStartup();
+
   runApp(
     MultiProvider(
       providers: [
@@ -23,11 +26,37 @@ Future<void> main() async {
       child: const DesktopSide(),
     ),
   );
-
 }
 
-class DesktopSide extends StatelessWidget {
+class DesktopSide extends StatefulWidget {
   const DesktopSide({super.key});
+
+  @override
+  State<DesktopSide> createState() => _DesktopSideState();
+}
+
+class _DesktopSideState extends State<DesktopSide> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  Future<AppExitResponse> didRequestAppExit() async {
+    print("Window close detected. Cleaning up background tasks...");
+
+    shutdownHotspotSync();
+    await bleInteropService.dispose();
+
+    return AppExitResponse.exit;
+  }
 
   @override
   Widget build(BuildContext context) {
