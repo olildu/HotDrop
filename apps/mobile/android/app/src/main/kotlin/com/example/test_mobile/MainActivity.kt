@@ -1,4 +1,4 @@
-package com.example.test_mobile // Make sure this matches your actual package name!
+package com.example.test_mobile 
 
 import android.content.Context
 import android.net.wifi.WifiManager
@@ -16,13 +16,13 @@ class MainActivity: FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
-            if (call.method == "startLocalOnlyHotspot") {
-                startHotspot(result)
-            } else if (call.method == "stopLocalOnlyHotspot") {
-                stopHotspot()
-                result.success(null)
-            } else {
-                result.notImplemented()
+            when (call.method) {
+                "startLocalOnlyHotspot" -> startHotspot(result)
+                "stopLocalOnlyHotspot" -> {
+                    stopHotspot()
+                    result.success(null)
+                }
+                else -> result.notImplemented()
             }
         }
     }
@@ -31,6 +31,18 @@ class MainActivity: FlutterActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
             
+            // FIX: If we already have an active reservation, return existing creds immediately
+            reservation?.let {
+                val config = it.wifiConfiguration
+                if (config != null) {
+                    val creds = HashMap<String, String>()
+                    creds["ssid"] = config.SSID
+                    creds["password"] = config.preSharedKey
+                    result.success(creds)
+                    return
+                }
+            }
+
             wifiManager.startLocalOnlyHotspot(object : WifiManager.LocalOnlyHotspotCallback() {
                 override fun onStarted(res: WifiManager.LocalOnlyHotspotReservation?) {
                     super.onStarted(res)
@@ -41,20 +53,30 @@ class MainActivity: FlutterActivity() {
                         val creds = HashMap<String, String>()
                         creds["ssid"] = config.SSID
                         creds["password"] = config.preSharedKey
-                        // Send the SSID and Password back to Flutter!
                         result.success(creds)
                     } else {
+                        // Cleanup if config is missing to avoid stuck states
+                        stopHotspot()
                         result.error("UNAVAILABLE", "Configuration is null", null)
                     }
                 }
 
                 override fun onStopped() {
                     super.onStopped()
+                    reservation = null // Reset on system-initiated stop
                 }
 
                 override fun onFailed(reason: Int) {
                     super.onFailed(reason)
-                    result.error("FAILED", "Failed to start hotspot. Reason code: $reason", null)
+                    reservation = null
+
+                    val msg = when (reason) {
+                        WifiManager.LocalOnlyHotspotCallback.ERROR_INCOMPATIBLE_MODE -> "Hotspot already in use by another application."
+                        WifiManager.LocalOnlyHotspotCallback.ERROR_NO_CHANNEL -> "No usable channel for hotspot."
+                        WifiManager.LocalOnlyHotspotCallback.ERROR_TETHERING_DISALLOWED -> "Tethering is not allowed."
+                        else -> "Failed with reason code: $reason"
+                    }
+                    result.error("FAILED", msg, null)
                 }
             }, null)
         } else {
@@ -63,7 +85,7 @@ class MainActivity: FlutterActivity() {
     }
 
     private fun stopHotspot() {
-        reservation?.close()
+        reservation?.close() // Explicitly close the Android reservation
         reservation = null
     }
 }

@@ -4,10 +4,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
+import 'package:network_info_plus/network_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:test_mobile/constants/globals.dart';
 import 'package:test_mobile/screens/main_screen.dart';
+import 'package:test_mobile/services/ble_peripheral_service.dart';
 import 'package:test_mobile/services/data_services.dart';
 import 'package:wifi_iot/wifi_iot.dart';
 import 'package:device_info_plus/device_info_plus.dart';
@@ -17,6 +19,13 @@ class AndroidFunction {
 
   Future<Map<String, String>?> startHosting() async {
     try {
+      await WiFiForIoTPlugin.forceWifiUsage(false);
+      await WiFiForIoTPlugin.disconnect();
+      await Future.delayed(const Duration(seconds: 1)); // Give OS time to release Wi-Fi
+
+      await platform.invokeMethod('stopLocalOnlyHotspot');
+      await Future.delayed(const Duration(seconds: 1));
+
       final Map<dynamic, dynamic>? creds = await platform.invokeMethod('startLocalOnlyHotspot');
 
       if (creds != null) {
@@ -24,10 +33,13 @@ class AndroidFunction {
         String password = creds['password'];
         log("Hotspot Started: $ssid", name: "Host");
 
-        await DartFunction().startServer();
+        // NOTE: DO NOT call startServer here anymore.
 
         String hostIp = "192.168.43.1";
         try {
+          // Give the hotspot 2 seconds to assign an IP to the network interface
+          await Future.delayed(const Duration(seconds: 2));
+
           final interfaces = await NetworkInterface.list();
           for (var interface in interfaces) {
             for (var addr in interface.addresses) {
@@ -38,11 +50,19 @@ class AndroidFunction {
               }
             }
           }
+          log("Resolved Host IP: $hostIp", name: "Host");
         } catch (e) {
           log("Error finding Host IP: $e", name: "Host");
         }
 
-        return {"ssid": ssid, "password": password, "ip": hostIp};
+        // FIX: Start the server AFTER resolving the IP, and pass the IP to it
+        await DartFunction().startServer(hostIp);
+
+        // Finally, broadcast the credentials over BLE
+        final connectionData = {"ssid": ssid, "password": password, "ip": hostIp};
+        await BlePeripheralService().startAdvertising(connectionData);
+
+        return connectionData;
       }
     } on PlatformException catch (e) {
       log("Failed to start hotspot: '${e.message}'.", name: "Host");
@@ -147,42 +167,60 @@ class ClientServices {
   }
 
   Future<bool> connectToHostSocket(String hostIp, {bool isAuto = false}) async {
-    try {
-      log("Connecting to TCP Server at $hostIp:42069...", name: "Client");
-      socket = await Socket.connect(hostIp, 42069, timeout: const Duration(seconds: 5));
-      connectedToPort = true;
-      log("Connected to Host Socket!", name: "Client");
+    int retryCount = 0;
+    bool connected = false;
 
-      if (navigatorKey.currentState != null) {
-        Future.delayed(const Duration(milliseconds: 100), () {
-          navigatorKey.currentState!.pushAndRemoveUntil(
-            MaterialPageRoute(builder: (context) => const MainScreen()),
-            (route) => false,
-          );
-        });
+    while (retryCount < 5 && !connected) {
+      try {
+        retryCount++;
+        // Delay is crucial! Gives Android OS time to route traffic to the no-internet Wi-Fi
+        await Future.delayed(const Duration(seconds: 3));
+
+        // Fallback: Get the actual gateway IP of the connected hotspot.
+        // This is often more reliable than the IP sent over BLE on newer Androids.
+        String? gatewayIp = await NetworkInfo().getWifiGatewayIP();
+        String targetIp = (gatewayIp != null && gatewayIp != "0.0.0.0") ? gatewayIp : hostIp;
+
+        log("Attempt $retryCount: Connecting to TCP Server at $targetIp:42069...", name: "Client");
+
+        socket = await Socket.connect(targetIp, 42069, timeout: const Duration(seconds: 5));
+        connectedToPort = true;
+        connected = true;
+        log("Connected to Host Socket!", name: "Client");
+
+        if (navigatorKey.currentState != null) {
+          Future.delayed(const Duration(milliseconds: 100), () {
+            navigatorKey.currentState!.pushAndRemoveUntil(
+              MaterialPageRoute(builder: (context) => const MainScreen()),
+              (route) => false,
+            );
+          });
+        }
+
+        socket!.listen(
+          (data) {
+            final message = String.fromCharCodes(data).trim();
+            log('Received: $message', name: "Client");
+            ReceivedDataParser().parseData(message);
+          },
+          onError: (e) {
+            log("Socket Error: $e", name: "Client");
+            connectedToPort = false;
+          },
+          onDone: () {
+            log("Socket closed by host", name: "Client");
+            connectedToPort = false;
+          },
+        );
+
+        return true;
+      } catch (e) {
+        log('Error connecting to socket (Attempt $retryCount): $e', name: "Client");
       }
-
-      socket!.listen(
-        (data) {
-          final message = String.fromCharCodes(data).trim();
-          log('Received: $message', name: "Client");
-          ReceivedDataParser().parseData(message);
-        },
-        onError: (e) {
-          log("Socket Error: $e", name: "Client");
-          connectedToPort = false;
-        },
-        onDone: () {
-          log("Socket closed by host", name: "Client");
-          connectedToPort = false;
-        },
-      );
-
-      return true;
-    } catch (e) {
-      log('Error connecting to socket: $e', name: "Client");
-      return false;
     }
+
+    log("Failed to connect to socket after $retryCount attempts.", name: "Client");
+    return false;
   }
 
   // --- NEW: Auto Reconnect Function ---
@@ -233,17 +271,17 @@ class Permissions {
       }
 
       // --- STORAGE LOGIC ---
-      // Note: If you truly need manageExternalStorage, you MUST add 
+      // Note: If you truly need manageExternalStorage, you MUST add
       // <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>
       // to your AndroidManifest.xml. If you just need standard files, remove it entirely.
       if (sdkInt < 33) {
         // Android 12 and below use standard storage
         permissions.add(Permission.storage);
       } else {
-        // On Android 13+, Permission.storage is ignored. You must request 
+        // On Android 13+, Permission.storage is ignored. You must request
         // Permission.photos, Permission.videos, or Permission.audio depending on your needs.
         // Or if you are keeping manageExternalStorage, add it here:
-        // permissions.add(Permission.manageExternalStorage); 
+        // permissions.add(Permission.manageExternalStorage);
       }
     }
 
@@ -256,7 +294,7 @@ class Permissions {
 
     if (Platform.isAndroid) {
       final androidInfo = await DeviceInfoPlugin().androidInfo;
-      
+
       if (androidInfo.version.sdkInt >= 31) {
         // Android 12+ requires Scan and Connect
         final scan = await Permission.bluetoothScan.request();
@@ -282,23 +320,42 @@ class Permissions {
 class DartFunction {
   ServerSocket? _serverSocket;
 
-  Future<void> startServer({int port = 42069}) async {
-    try {
-      _serverSocket = await ServerSocket.bind(InternetAddress.anyIPv4, port);
-      log("TCP Server listening on port $port", name: "Server");
-
-      _serverSocket!.listen((client) {
-        log("New connection from ${client.remoteAddress.address}", name: "Server");
-        handleClient(client);
-      });
-    } catch (e) {
-      log("Error starting server: $e", name: "Server");
+  Future<void> startServer(String hostIp, {int port = 42069}) async {
+    // Don't start if already running
+    if (_serverSocket != null) {
+      log("Server already running, skipping start.", name: "Server");
+      return;
     }
+
+    int retryCount = 0;
+    while (retryCount < 5) {
+      try {
+        _serverSocket = await ServerSocket.bind(
+          InternetAddress.anyIPv4,
+          port,
+          shared: true,
+        );
+        log("TCP Server listening on $hostIp:$port", name: "Server");
+
+        _serverSocket!.listen((client) {
+          log("New connection from ${client.remoteAddress.address}", name: "Server");
+          handleClient(client);
+        });
+        return;
+      } catch (e) {
+        retryCount++;
+        log("Server start attempt $retryCount failed: $e. Retrying in 2s...", name: "Server");
+        await Future.delayed(const Duration(seconds: 2));
+      }
+    }
+    log("Failed to start server after multiple attempts.", name: "Server");
   }
 
   void handleClient(Socket client) {
     socket = client;
     connectedToPort = true;
+
+    BlePeripheralService().stopAdvertising();
 
     // Force the Host's UI to refresh to the Main Screen, closing the QR code
     navigatorKey.currentState?.pushAndRemoveUntil(

@@ -1,3 +1,4 @@
+import 'dart:developer';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:test_mobile/constants/globals.dart';
 import 'package:test_mobile/providers/file_detail_provider.dart';
+import 'package:test_mobile/services/ble_peripheral_service.dart';
 import 'package:test_mobile/services/connection_services.dart';
 import 'package:test_mobile/services/data_services.dart';
 import 'package:test_mobile/widget/main_screen_widgets.dart';
@@ -20,13 +22,52 @@ class MainScreen extends StatefulWidget {
   State createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State {
+class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     getContacts();
     Provider.of<FileDetailProvider>(context, listen: false).loadFileDetails();
     _attemptSilentReconnect();
+  }
+
+  @override
+  void dispose() {
+    // 2. Remove the observer when the widget is destroyed
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // 3. Listen for app lifecycle changes
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.detached) {
+      // The app is being killed/swiped away
+      _performCleanup();
+    }
+  }
+
+  // 4. Clean up all connections and broadcasts
+  void _performCleanup() {
+    const String logTag = "_performCleanup";
+    // Stop BLE Advertising
+    try {
+      BlePeripheralService().stopAdvertising();
+
+      // Stop the Local Only Hotspot using your native channel
+      AndroidFunction.platform.invokeMethod('stopLocalOnlyHotspot');
+
+      // Close any active TCP sockets
+      if (socket != null) {
+        socket!.destroy();
+        socket = null;
+        connectedToPort = false;
+      }
+      log("Successfully cleaned up", name: logTag);
+    } on Exception catch (e) {
+      log("Failed during cleanup $e", name: logTag);
+    }
   }
 
   Future<void> _attemptSilentReconnect() async {

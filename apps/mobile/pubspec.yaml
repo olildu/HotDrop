@@ -58,6 +58,8 @@ dependencies:
   open_filex: ^4.7.0
   flutter_blue_plus: ^2.2.1
   device_info_plus: ^12.4.0
+  flutter_ble_peripheral: ^2.1.0
+  ble_peripheral: ^2.4.0
 
 dev_dependencies:
   flutter_test:
