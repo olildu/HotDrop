@@ -1,462 +1,440 @@
-import 'dart:async';
-import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:gap/gap.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
-import 'package:test_mobile/services/connection_services.dart';
+import 'package:test_mobile/blocs/connection/connection_cubit.dart';
+import 'package:test_mobile/core/theme/app_colors.dart';
 
-class ConnectionScreen extends StatefulWidget {
-  const ConnectionScreen({super.key});
+// --- SHARED RADAR VIEW COMPONENT ---
+class RadarStateView extends StatefulWidget {
+  final bool isReceiving;
+
+  const RadarStateView({super.key, required this.isReceiving});
 
   @override
-  State<ConnectionScreen> createState() => _ConnectionScreenState();
+  State<RadarStateView> createState() => _RadarStateViewState();
 }
 
-class _ConnectionScreenState extends State<ConnectionScreen> with SingleTickerProviderStateMixin {
-  String? _qrData;
-  bool _isHosting = false;
-  bool _isReceiving = false;
-  bool _isConnecting = false;
-
-  // Status text for UI feedback
-  String _statusMessage = "Initializing...";
-
-  // BLE specific variables
-  bool _isScanningBle = false;
-  StreamSubscription<List<ScanResult>>? _scanSubscription;
-  List<ScanResult> _discoveredDevices = [];
-
-  final String _serviceUuid = "0000FFFF-0000-1000-8000-00805F9B34FB";
-  final String _charUuid = "0000FFFE-0000-1000-8000-00805F9B34FB";
-
-  // Animation controller for the radar pulse effect
+class _RadarStateViewState extends State<RadarStateView> with SingleTickerProviderStateMixin {
   late AnimationController _pulseController;
+  bool _showScanner = false;
 
   @override
   void initState() {
     super.initState();
     _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 2),
-    );
+      duration: const Duration(seconds: 3),
+    )..repeat();
   }
 
   @override
   void dispose() {
     _pulseController.dispose();
-    _scanSubscription?.cancel();
-    FlutterBluePlus.stopScan();
     super.dispose();
-  }
-
-  Future<void> _startHost() async {
-    setState(() => _isHosting = true);
-    final creds = await AndroidFunction().startHosting();
-    if (creds != null && mounted) {
-      setState(() {
-        _qrData = jsonEncode(creds);
-      });
-    }
-  }
-
-  void _startClient() {
-    setState(() {
-      _isReceiving = true;
-      _isScanningBle = true;
-      _discoveredDevices.clear();
-      _statusMessage = "Searching for HotDrop hosts...";
-    });
-    _pulseController.repeat();
-    _scanForBleDevices();
-  }
-
-  void _switchToQrScanner() {
-    _scanSubscription?.cancel();
-    FlutterBluePlus.stopScan();
-    _pulseController.stop();
-    if (mounted) {
-      setState(() {
-        _isScanningBle = false;
-        _isConnecting = false;
-        _statusMessage = "Scan Host's QR Code";
-      });
-    }
-  }
-
-  Future<void> _scanForBleDevices() async {
-    try {
-      if (await FlutterBluePlus.isSupported == false) {
-        _switchToQrScanner();
-        return;
-      }
-      await Permissions().ensureBlePermissions();
-
-      await FlutterBluePlus.startScan(
-        withServices: [Guid(_serviceUuid)],
-        timeout: const Duration(seconds: 15),
-      );
-
-      _scanSubscription = FlutterBluePlus.scanResults.listen((results) {
-        if (mounted) {
-          setState(() {
-            _discoveredDevices = results;
-          });
-        }
-      });
-
-      Future.delayed(const Duration(seconds: 15), () {
-        if (mounted && _isScanningBle && _discoveredDevices.isEmpty && !_isConnecting) {
-          _switchToQrScanner();
-        }
-      });
-    } catch (e) {
-      _switchToQrScanner();
-    }
-  }
-
-  void logBle(String message) {
-    final time = DateTime.now().toIso8601String();
-    print("[$time][BLE] $message");
-  }
-
-  Future<void> _connectToBleDevice(BluetoothDevice device) async {
-    _scanSubscription?.cancel();
-    FlutterBluePlus.stopScan();
-    _pulseController.stop();
-
-    setState(() {
-      _isConnecting = true;
-      _statusMessage = "Connecting to ${device.platformName.isNotEmpty ? device.platformName : 'Host'}...";
-    });
-
-    try {
-      await device.connect(timeout: const Duration(seconds: 5), license: License.free);
-
-      if (mounted) setState(() => _statusMessage = "Discovering services...");
-      List<BluetoothService> services = await device.discoverServices();
-
-      for (var service in services) {
-        if (service.uuid == Guid(_serviceUuid)) {
-          logBle("✅ TARGET SERVICE FOUND");
-
-          for (var char in service.characteristics) {
-            if (char.uuid == Guid(_charUuid)) {
-              logBle("✅ TARGET CHARACTERISTIC FOUND");
-
-              if (mounted) setState(() => _statusMessage = "Reading credentials...");
-              try {
-                List<int> value = await char.read();
-                String jsonStr = utf8.decode(value);
-                logBle("✅ FINAL DATA → $jsonStr");
-
-                await device.disconnect();
-                _processConnectionCredentials(jsonStr);
-                return;
-              } catch (e) {
-                logBle("❌ READ ERROR → $e");
-              }
-            }
-          }
-        }
-      }
-
-      logBle("❌ TARGET NOT FOUND");
-      await device.disconnect();
-      _switchToQrScanner();
-    } catch (e) {
-      _switchToQrScanner();
-    } finally {
-      if (mounted && _isConnecting) {
-        setState(() => _isConnecting = false);
-      }
-    }
-  }
-
-  void _onDetectQR(BarcodeCapture capture) async {
-    if (_isConnecting) return;
-
-    final List<Barcode> barcodes = capture.barcodes;
-    for (final barcode in barcodes) {
-      if (barcode.rawValue != null) {
-        _processConnectionCredentials(barcode.rawValue!);
-        break;
-      }
-    }
-  }
-
-  Future<void> _processConnectionCredentials(String rawData) async {
-    setState(() {
-      _isConnecting = true;
-      _statusMessage = "Joining network...";
-    });
-
-    try {
-      final creds = jsonDecode(rawData);
-
-      if (creds['isDesktop'] == true) {
-        String hostIp = creds['ip'];
-        bool connected = await ClientServices().connectToHostSocket(hostIp);
-        if (connected && mounted) Navigator.pop(context);
-      } else {
-        String ssid = creds['ssid'];
-        String pass = creds['password'];
-        String hostIp = creds['ip'] ?? "192.168.43.1";
-
-        bool connected = await ClientServices().connectToHostHotspot(ssid, pass, hostIp);
-        if (connected && mounted) {
-          Navigator.pop(context);
-        } else {
-          if (mounted) {
-            setState(() {
-              _isConnecting = false;
-              _isReceiving = false;
-            });
-          }
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Connection Failed")));
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isConnecting = false;
-          _isReceiving = false;
-        });
-      }
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Invalid Credentials: $e")));
-    }
-  }
-
-  Widget _buildPulseRadar() {
-    return AnimatedBuilder(
-      animation: _pulseController,
-      builder: (context, child) {
-        return Stack(
-          alignment: Alignment.center,
-          children: [
-            Container(
-              width: 100.w + (_pulseController.value * 150.w),
-              height: 100.w + (_pulseController.value * 150.w),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withOpacity(1.0 - _pulseController.value),
-              ),
-            ),
-            Container(
-              width: 100.w + ((_pulseController.value * 150.w) / 2),
-              height: 100.w + ((_pulseController.value * 150.w) / 2),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withOpacity((1.0 - _pulseController.value) * 0.5),
-              ),
-            ),
-            CircleAvatar(
-              radius: 40.r,
-              backgroundColor: Colors.white,
-              child: Icon(Icons.wifi_tethering, color: const Color(0xFF49454F), size: 40.sp),
-            ),
-          ],
-        );
-      },
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF49454F),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: const BackButton(color: Colors.white),
-        title: Text("Connect Device", style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w500)),
-      ),
-      body: Center(
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 500),
-          switchInCurve: Curves.easeOutCubic,
-          switchOutCurve: Curves.easeInCubic,
-          child: _buildCurrentState(),
+    final textTheme = Theme.of(context).textTheme;
+
+    return Stack(
+      children: [
+        Column(
+          children: [
+            Gap(40.h),
+
+            // --- 1. AirDrop-Style Circular Radar ---
+            BlocBuilder<ConnectionCubit, ConnectionCubitState>(builder: (context, state) {
+              return SizedBox(
+                height: 320.h,
+                width: 320.w, // Increased size to fit orbiting nodes
+                child: Stack(
+                  alignment: Alignment.center,
+                  clipBehavior: Clip.none,
+                  children: [
+                    // Pulsing Rings
+                    AnimatedBuilder(
+                      animation: _pulseController,
+                      builder: (context, child) {
+                        return CustomPaint(
+                          size: Size(300.w, 300.w),
+                          painter: _RadarPulsePainter(
+                            progress: _pulseController.value,
+                            color: AppColors.primary,
+                          ),
+                        );
+                      },
+                    ),
+
+                    // Central Compact Beacon
+                    if (state.discoveredDevices.isEmpty)
+                      Container(
+                        width: 64.w,
+                        height: 64.w,
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withOpacity(0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Icon(
+                            Icons.sensors_rounded, // Replaced arrow with compact beacon
+                            color: AppColors.primary,
+                            size: 32.sp,
+                          ),
+                        ),
+                      ),
+
+                    // Orbiting Discovered Devices
+                    if (!widget.isReceiving)
+                      ...state.discoveredDevices.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final device = entry.value;
+                        final count = state.discoveredDevices.length;
+
+                        // Orbit radius
+                        final radius = 130.w;
+
+                        // Calculate angle for arch distribution (top half)
+                        double angle;
+                        if (count == 1) {
+                          angle = -math.pi / 2; // Top center
+                        } else {
+                          // Spread evenly from -150° to -30°
+                          double startAngle = -math.pi + (math.pi / 6);
+                          double endAngle = -(math.pi / 6);
+                          angle = startAngle + (endAngle - startAngle) * (index / (count - 1));
+                        }
+
+                        // Trigonometry for X and Y position
+                        final dx = radius * math.cos(angle);
+                        final dy = radius * math.sin(angle);
+
+                        return Transform.translate(
+                          offset: Offset(dx, dy),
+                          child: GestureDetector(
+                            onTap: () {
+                              _pulseController.stop();
+                              context.read<ConnectionCubit>().connectToDiscoveredDevice(device);
+                            },
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                CircleAvatar(
+                                  radius: 30.r,
+                                  backgroundColor: AppColors.surfaceContainerHigh,
+                                  child: Icon(Icons.person, color: AppColors.primary, size: 32.sp),
+                                ),
+                                Gap(8.h),
+                                SizedBox(
+                                  width: 90.w,
+                                  child: Text(
+                                    device.name,
+                                    textAlign: TextAlign.center,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: textTheme.labelSmall?.copyWith(
+                                      color: AppColors.onSurface,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }),
+                  ],
+                ),
+              );
+            }),
+
+            Gap(20.h),
+
+            // --- 2. Typography ---
+            Text(
+              widget.isReceiving ? "Ready to receive" : "Ready to send",
+              style: textTheme.headlineMedium?.copyWith(fontSize: 32.sp),
+            ),
+            Gap(12.h),
+            Text(
+              widget.isReceiving ? "Nearby devices can see you as" : "Select a device nearby to share.",
+              textAlign: TextAlign.center,
+              style: textTheme.titleMedium?.copyWith(
+                color: AppColors.onSurfaceVariant,
+                fontWeight: FontWeight.normal,
+              ),
+            ),
+            Gap(8.h),
+            if (widget.isReceiving)
+              Text(
+                "HotDrop-Android",
+                style: textTheme.titleMedium?.copyWith(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+
+            const Spacer(),
+
+            // --- 3. Simplified Status Card ---
+            BlocBuilder<ConnectionCubit, ConnectionCubitState>(builder: (context, state) {
+              String statusMsg = widget.isReceiving ? "Waiting for connections..." : "Searching for receivers...";
+              if (state.status == ConnectionStatus.connecting) statusMsg = "Connecting to peer...";
+
+              return Padding(
+                padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 32.h),
+                child: Container(
+                  padding: EdgeInsets.all(20.w),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceContainerLow,
+                    borderRadius: BorderRadius.circular(32.r),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.all(12.w),
+                            decoration: const BoxDecoration(
+                              color: AppColors.surfaceContainerHighest,
+                              shape: BoxShape.circle,
+                            ),
+                            child: state.status == ConnectionStatus.connecting
+                                ? SizedBox(height: 20.sp, width: 20.sp, child: const CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary))
+                                : Icon(Icons.wifi_tethering_rounded, color: AppColors.primary, size: 20.sp),
+                          ),
+                          Gap(16.w),
+                          Expanded(
+                            child: Text(
+                              statusMsg,
+                              style: textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w500,
+                                fontSize: 15.sp,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      Gap(16.h),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              "Visibility is limited to your local network.",
+                              style: textTheme.bodyMedium?.copyWith(
+                                color: AppColors.onSurfaceVariant,
+                                fontSize: 12.sp,
+                              ),
+                            ),
+                          ),
+                          if (!widget.isReceiving)
+                            GestureDetector(
+                              onTap: () => setState(() => _showScanner = true),
+                              child: Text(
+                                "Scan QR Instead",
+                                style: textTheme.bodyMedium?.copyWith(
+                                  color: AppColors.primary,
+                                  fontSize: 12.sp,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            )
+                        ],
+                      )
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ],
         ),
+
+        // --- 4. QR Scanner Overlay ---
+        if (!widget.isReceiving && _showScanner)
+          Positioned.fill(
+            child: Container(
+              color: AppColors.surface,
+              child: Column(
+                children: [
+                  AppBar(
+                    backgroundColor: Colors.transparent,
+                    elevation: 0,
+                    leading: BackButton(
+                      color: AppColors.onSurface,
+                      onPressed: () => setState(() => _showScanner = false),
+                    ),
+                    title: Text("Scan QR Code", style: textTheme.titleMedium),
+                  ),
+                  Expanded(
+                    child: Container(
+                      margin: EdgeInsets.all(40.w),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(32.r),
+                        border: Border.all(color: AppColors.surfaceContainerHighest, width: 4.w),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(28.r),
+                        child: MobileScanner(
+                          onDetect: (capture) {
+                            final code = capture.barcodes.first.rawValue;
+                            if (code != null) {
+                              context.read<ConnectionCubit>().joinSession(code);
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+// --- RECEIVE SCREEN ---
+class ReceiveScreen extends StatefulWidget {
+  const ReceiveScreen({super.key});
+
+  @override
+  State<ReceiveScreen> createState() => _ReceiveScreenState();
+}
+
+class _ReceiveScreenState extends State<ReceiveScreen> {
+  @override
+  void initState() {
+    super.initState();
+    context.read<ConnectionCubit>().startHosting();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocListener<ConnectionCubit, ConnectionCubitState>(
+      listener: (context, state) {
+        if (state.status == ConnectionStatus.connected) Navigator.pop(context);
+        if (state.status == ConnectionStatus.error) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(state.errorMessage ?? "Error")));
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.surface,
+        appBar: _buildAppBar(context),
+        body: const RadarStateView(isReceiving: true),
       ),
     );
   }
 
-  Widget _buildCurrentState() {
-    // --- 1. IDLE STATE ---
-    if (!_isHosting && !_isReceiving) {
-      return Column(
-        key: const ValueKey("IdleState"),
-        mainAxisAlignment: MainAxisAlignment.center,
+  PreferredSizeWidget _buildAppBar(BuildContext context) {
+    return AppBar(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      leading: const BackButton(color: AppColors.onSurface),
+      title: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.devices_rounded, size: 100.sp, color: Colors.white70),
-          Gap(40.h),
-          ElevatedButton.icon(
-            onPressed: _startHost,
-            icon: const Icon(Icons.send_rounded, color: Color(0xFF49454F)),
-            label: Text("Host Connection", style: GoogleFonts.poppins(color: const Color(0xFF49454F), fontSize: 16.sp, fontWeight: FontWeight.w600)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              minimumSize: Size(250.w, 55.h),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15.r)),
-              elevation: 5,
-            ),
-          ),
-          Gap(20.h),
-          ElevatedButton.icon(
-            onPressed: _startClient,
-            icon: const Icon(Icons.download_rounded, color: Colors.white),
-            label: Text("Join Connection", style: GoogleFonts.poppins(color: Colors.white, fontSize: 16.sp, fontWeight: FontWeight.w600)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF67636F), // Slightly lighter than background
-              minimumSize: Size(250.w, 55.h),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15.r)),
-              elevation: 0,
-            ),
-          ),
+          Icon(Icons.bubble_chart, color: AppColors.primary, size: 28.sp),
+          Gap(8.w),
+          Text("HotDrop", style: GoogleFonts.inter(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 22.sp)),
         ],
-      );
-    }
-
-    // --- 2. HOSTING STATE ---
-    if (_isHosting) {
-      return Column(
-        key: const ValueKey("HostingState"),
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text("Waiting for receiver...", style: GoogleFonts.poppins(color: Colors.white, fontSize: 20.sp, fontWeight: FontWeight.w600)),
-          Gap(10.h),
-          Text("Scan this QR code on the joining device", style: GoogleFonts.poppins(color: Colors.white70, fontSize: 14.sp)),
-          Gap(40.h),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            child: _qrData == null
-                ? const CircularProgressIndicator(color: Colors.white)
-                : Container(
-                    padding: EdgeInsets.all(20.w),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(25.r),
-                      boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 20, spreadRadius: 2)],
-                    ),
-                    child: QrImageView(
-                      data: _qrData!,
-                      version: QrVersions.auto,
-                      size: 220.w,
-                    ),
-                  ),
-          ),
-        ],
-      );
-    }
-
-    // --- 3. RECEIVING STATE ---
-    if (_isReceiving) {
-      // 3A. Connecting
-      if (_isConnecting) {
-        return Column(
-          key: const ValueKey("ConnectingState"),
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const CircularProgressIndicator(color: Colors.white),
-            Gap(30.h),
-            Text(_statusMessage, style: GoogleFonts.poppins(color: Colors.white, fontSize: 18.sp, fontWeight: FontWeight.w500)),
-            Gap(10.h),
-            Text("Please wait, finalizing connection details.", style: GoogleFonts.poppins(color: Colors.white54, fontSize: 14.sp)),
-          ],
-        );
-      }
-
-      // 3B. Scanning BLE
-      if (_isScanningBle) {
-        return Column(
-          key: const ValueKey("ScanningState"),
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SizedBox(
-              height: 250.h,
-              child: _buildPulseRadar(),
-            ),
-            Gap(20.h),
-            Text(_statusMessage, style: GoogleFonts.poppins(color: Colors.white, fontSize: 18.sp, fontWeight: FontWeight.w600)),
-            Gap(30.h),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 400),
-              curve: Curves.easeInOut,
-              height: _discoveredDevices.isEmpty ? 0 : 250.h,
-              width: 320.w,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20.r),
-                border: Border.all(color: Colors.white24),
-              ),
-              child: _discoveredDevices.isEmpty
-                  ? const SizedBox()
-                  : ListView.separated(
-                      padding: EdgeInsets.all(10.w),
-                      itemCount: _discoveredDevices.length,
-                      separatorBuilder: (_, __) => Divider(color: Colors.white24, height: 1.h),
-                      itemBuilder: (context, index) {
-                        final device = _discoveredDevices[index].device;
-                        final name = device.platformName.isNotEmpty ? device.platformName : "Unknown Device";
-
-                        return ListTile(
-                          contentPadding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 5.h),
-                          leading: CircleAvatar(
-                            backgroundColor: Colors.white24,
-                            child: Icon(Icons.computer_rounded, color: Colors.white, size: 22.sp),
-                          ),
-                          title: Text(name, style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15.sp)),
-                          subtitle: Text("Tap to connect", style: GoogleFonts.poppins(color: Colors.white70, fontSize: 12.sp)),
-                          trailing: Icon(Icons.arrow_forward_ios_rounded, color: Colors.white54, size: 16.sp),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
-                          onTap: () => _connectToBleDevice(device),
-                        );
-                      },
-                    ),
-            ),
-            Gap(_discoveredDevices.isEmpty ? 80.h : 20.h),
-            TextButton.icon(
-              onPressed: _switchToQrScanner,
-              icon: const Icon(Icons.qr_code_scanner, color: Colors.white),
-              label: Text("Scan QR Code Instead",
-                  style: GoogleFonts.poppins(color: Colors.white, fontSize: 15.sp, decoration: TextDecoration.underline)),
-            )
-          ],
-        );
-      }
-
-      // 3C. QR Fallback
-      return Column(
-        key: const ValueKey("QrState"),
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(_statusMessage, style: GoogleFonts.poppins(color: Colors.white, fontSize: 20.sp, fontWeight: FontWeight.w600)),
-          Gap(10.h),
-          Text("Align the host's QR code within the frame", style: GoogleFonts.poppins(color: Colors.white70, fontSize: 14.sp)),
-          Gap(40.h),
-          Container(
-            height: 300.h,
-            width: 300.w,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(30.r),
-              border: Border.all(color: Colors.white54, width: 3.w),
-              boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 20, spreadRadius: 5)],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(27.r),
-              child: MobileScanner(
-                onDetect: _onDetectQR,
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-
-    return const SizedBox();
+      ),
+      actions: [
+        Padding(
+          padding: EdgeInsets.only(right: 20.w),
+          child: Icon(Icons.account_circle_outlined, color: AppColors.onSurface, size: 28.sp),
+        ),
+      ],
+    );
   }
+}
+
+// --- SEND SCREEN ---
+class SendScreen extends StatefulWidget {
+  const SendScreen({super.key});
+
+  @override
+  State<SendScreen> createState() => _SendScreenState();
+}
+
+class _SendScreenState extends State<SendScreen> {
+  @override
+  void initState() {
+    super.initState();
+    context.read<ConnectionCubit>().startScanning();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocListener<ConnectionCubit, ConnectionCubitState>(
+      listener: (context, state) {
+        if (state.status == ConnectionStatus.connected) Navigator.pop(context);
+        if (state.status == ConnectionStatus.error) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(state.errorMessage ?? "Error")));
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.surface,
+        appBar: _buildAppBar(context),
+        body: const RadarStateView(isReceiving: false),
+      ),
+    );
+  }
+
+  PreferredSizeWidget _buildAppBar(BuildContext context) {
+    return AppBar(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      leading: const BackButton(color: AppColors.onSurface),
+      title: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.bubble_chart, color: AppColors.primary, size: 28.sp),
+          Gap(8.w),
+          Text("HotDrop", style: GoogleFonts.inter(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 22.sp)),
+        ],
+      ),
+      actions: [
+        Padding(
+          padding: EdgeInsets.only(right: 20.w),
+          child: Icon(Icons.account_circle_outlined, color: AppColors.onSurface, size: 28.sp),
+        ),
+      ],
+    );
+  }
+}
+
+// --- RADAR PULSE PAINTER ---
+class _RadarPulsePainter extends CustomPainter {
+  final double progress;
+  final Color color;
+
+  _RadarPulsePainter({required this.progress, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+
+    final center = Offset(size.width / 2, size.height / 2);
+    final maxRadius = size.width / 2;
+
+    for (int i = 0; i < 3; i++) {
+      final ringProgress = (progress + (i * 0.333)) % 1.0;
+      final radius = maxRadius * math.sin(ringProgress * math.pi / 2);
+      final opacity = (1.0 - ringProgress).clamp(0.0, 1.0) * 0.3; // Softer opacity for elegance
+
+      paint.color = color.withOpacity(opacity);
+      canvas.drawCircle(center, radius, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _RadarPulsePainter oldDelegate) => oldDelegate.progress != progress;
 }

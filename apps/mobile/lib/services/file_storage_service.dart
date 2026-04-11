@@ -1,41 +1,31 @@
 import 'dart:convert';
 import 'dart:developer';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../data/models/file_model.dart';
 
 class FileStorageService {
-  static const _messagesKey = 'file_storage_details';
+  static const _key = 'file_storage_details';
 
-  Future<void> saveFileDetails({
-    required String fileName,
-    required int fileSize,
-    required DateTime timestamp,
-    required double transferSpeed,
-    required bool isSent,
-    String? filePath,
-  }) async {
+  // Updated to accept the model
+  Future<void> saveFileDetail(FileModel file) async {
     final prefs = await SharedPreferences.getInstance();
-    final existingMessages = await loadFileDetails();
+    final existingFiles = await loadFileDetails();
+    
+    existingFiles.add(file);
 
-    existingMessages.add({
-      'file_name': fileName,
-      'file_size': fileSize,
-      'timestamp': timestamp.toIso8601String(),
-      "is_sent": isSent,
-      "transfer_speed": transferSpeed,
-      "file_path": filePath,
-    });
+    final jsonString = jsonEncode(existingFiles.map((f) => f.toJson()).toList());
+    await prefs.setString(_key, jsonString);
 
-    final jsonString = jsonEncode(existingMessages);
-    await prefs.setString(_messagesKey, jsonString);
-
-    log('File details saved: $fileName', name: 'FileStorageService');
+    log('File detail saved: ${file.name}', name: 'FileStorageService');
   }
 
-  Future<List<Map<String, dynamic>>> loadFileDetails() async {
+  // Updated to return a list of Models
+  Future<List<FileModel>> loadFileDetails() async {
     final prefs = await SharedPreferences.getInstance();
-    final jsonString = prefs.getString(_messagesKey);
+    final jsonString = prefs.getString(_key);
     if (jsonString != null) {
-      return List<Map<String, dynamic>>.from(jsonDecode(jsonString));
+      final List<dynamic> decoded = jsonDecode(jsonString);
+      return decoded.map((item) => FileModel.fromJson(item)).toList();
     }
     return [];
   }

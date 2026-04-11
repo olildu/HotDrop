@@ -1,24 +1,12 @@
-import 'dart:developer';
-
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:provider/provider.dart';
-import 'package:test_mobile/providers/message_provider.dart';
-import 'package:test_mobile/services/data_services.dart';
-import 'package:test_mobile/services/message_storage_service.dart';
 import 'package:gap/gap.dart';
-
-class Message {
-  final String content;
-  final bool isSent;
-  final DateTime timestamp;
-
-  Message({
-    required this.content,
-    required this.isSent,
-    required this.timestamp,
-  });
-}
+import 'package:google_fonts/google_fonts.dart';
+import 'package:test_mobile/blocs/message_cubit.dart';
+import 'package:test_mobile/blocs/session/session_cubit.dart';
+import 'package:test_mobile/core/theme/app_colors.dart';
+import 'package:test_mobile/data/models/message_model.dart';
 
 class MessagingScreen extends StatefulWidget {
   final Map<String, dynamic> data;
@@ -32,35 +20,6 @@ class MessagingScreen extends StatefulWidget {
 class _MessagingScreenState extends State<MessagingScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  final MessageStorageService _storageService = MessageStorageService();
-
-  @override
-  void initState() {
-    super.initState();
-    _loadStoredMessages();
-  }
-
-  void _loadStoredMessages() async {
-    final provider = Provider.of<MessageProvider>(context, listen: false);
-
-    if (provider.messages.isEmpty) {
-      final messages = await _storageService.loadMessages();
-      for (var msg in messages) {
-        provider.addMessage(msg['content'], msg['isSent'] as bool);
-      }
-    }
-  }
-
-
-  void _sendMessage() {
-    final text = _messageController.text.trim();
-    if (text.isNotEmpty) {
-      OutgoingDataParser().parseMessages(text);
-      Provider.of<MessageProvider>(context, listen: false).addMessage(text, true);
-      _storageService.saveMessage(text, true, DateTime.now());
-      _messageController.clear();
-    }
-  }
 
   @override
   void dispose() {
@@ -69,117 +28,177 @@ class _MessagingScreenState extends State<MessagingScreen> {
     super.dispose();
   }
 
+  void _sendMessage() {
+    final text = _messageController.text.trim();
+    if (text.isNotEmpty) {
+      context.read<MessageCubit>().sendMessage(text);
+      _messageController.clear();
+      _scrollToBottom();
+    }
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        titleSpacing: 0,
-        title: Text(
-          'Chat',
-          style: TextStyle(
-            color: const Color(0xFF49454F),
-            fontSize: 20.sp,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+      backgroundColor: AppColors.surface,
+      appBar: _buildAppBar(context),
+      body: BlocBuilder<SessionCubit, SessionState>(
+        builder: (context, sessionState) {
+          final isConnected = sessionState.status == SessionStatus.connected;
+
+          return Column(
+            children: [
+              // Connection Status Banner
+              if (!isConnected)
+                Container(
+                  width: double.infinity,
+                  color: Colors.redAccent.withOpacity(0.1),
+                  padding: EdgeInsets.symmetric(vertical: 8.h),
+                  child: Text(
+                    "DISCONNECTED - MESSAGING UNAVAILABLE",
+                    textAlign: TextAlign.center,
+                    style: textTheme.labelSmall?.copyWith(color: Colors.redAccent, fontWeight: FontWeight.bold),
+                  ),
+                ),
+
+              // Message List
+              Expanded(
+                child: BlocConsumer<MessageCubit, MessageState>(
+                  listener: (context, state) => _scrollToBottom(),
+                  builder: (context, state) {
+                    if (state.messages.isEmpty) {
+                      return _buildEmptyState(textTheme);
+                    }
+                    return ListView.builder(
+                      controller: _scrollController,
+                      padding: EdgeInsets.all(24.w),
+                      itemCount: state.messages.length,
+                      itemBuilder: (context, index) => _MessageBubble(message: state.messages[index]),
+                    );
+                  },
+                ),
+              ),
+
+              // Input Area
+              _buildInputArea(isConnected),
+            ],
+          );
+        },
       ),
-      body: Padding(
-        padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 10.h),
-        child: Column(
-          children: [
-            Expanded(
-              child: Consumer<MessageProvider>(
-                builder: (context, messageProvider, child) {
-                  return ListView.builder(
-                    controller: _scrollController,
-                    itemCount: messageProvider.messages.length,
-                    padding: EdgeInsets.only(bottom: 20.h),
-                    itemBuilder: (context, index) {
-                      log(messageProvider.messages[index].toString());
-                      return _MessageBubble(
-                        message: messageProvider.messages[index]["message"],
-                        isSent: messageProvider.messages[index]["sender"] == "Me" ? true : false,
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
-            Gap(8.h),
-            Text(
-              'Messages are end-to-end encrypted',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: const Color(0xFF49454F),
-                fontSize: 12.sp,
-              ),
-            ),
-            Gap(12.h),
-            Container(
+    );
+  }
+
+  PreferredSizeWidget _buildAppBar(BuildContext context) {
+    return AppBar(
+      backgroundColor: AppColors.surface,
+      elevation: 0,
+      leading: const BackButton(color: AppColors.onSurface),
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("Direct Workspace", style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 18.sp)),
+          Text("End-to-End Encrypted Tunnel", style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppColors.onSurfaceVariant)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(TextTheme textTheme) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.forum_outlined, size: 64.sp, color: AppColors.surfaceContainerHighest),
+          Gap(16.h),
+          Text("No signals detected in this channel.", style: textTheme.bodyMedium?.copyWith(color: AppColors.onSurfaceVariant)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInputArea(bool isConnected) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(24.w, 12.h, 24.w, 32.h),
+      decoration: const BoxDecoration(color: AppColors.surface),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: 20.w),
               decoration: BoxDecoration(
-                color: const Color(0xFFF6F6F6),
-                borderRadius: BorderRadius.circular(12.r),
-                border: Border.all(color: const Color(0xFFE0E0E0)),
+                color: AppColors.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(28.r),
               ),
-              padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 5.h),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _messageController,
-                      textCapitalization: TextCapitalization.sentences,
-                      decoration: const InputDecoration(
-                        hintText: 'Type a message...',
-                        border: InputBorder.none,
-                      ),
-                      onSubmitted: (_) => _sendMessage(),
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.send),
-                    onPressed: _sendMessage,
-                    color: const Color(0xFF49454F),
-                  ),
-                ],
+              child: TextField(
+                controller: _messageController,
+                enabled: isConnected,
+                style: const TextStyle(color: AppColors.onSurface),
+                decoration: InputDecoration(
+                  hintText: isConnected ? "Enter kinetic pulse..." : "Waiting for connection...",
+                  border: InputBorder.none,
+                  hintStyle: TextStyle(color: AppColors.onSurfaceVariant.withOpacity(0.5)),
+                ),
+                onSubmitted: (_) => _sendMessage(),
               ),
             ),
-          ],
-        ),
+          ),
+          Gap(12.w),
+          GestureDetector(
+            onTap: isConnected ? _sendMessage : null,
+            child: CircleAvatar(
+              radius: 28.r,
+              backgroundColor: isConnected ? AppColors.primary : AppColors.surfaceContainerHighest,
+              child: Icon(Icons.send_rounded, color: isConnected ? AppColors.surface : AppColors.onSurfaceVariant, size: 22.sp),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
 class _MessageBubble extends StatelessWidget {
-  final String message;
-  final bool isSent;
-
-  const _MessageBubble({required this.message, required this.isSent});
+  final MessageModel message;
+  const _MessageBubble({required this.message});
 
   @override
   Widget build(BuildContext context) {
+    final isMe = message.isSent;
     return Align(
-      alignment: isSent ? Alignment.centerRight : Alignment.centerLeft,
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        margin: EdgeInsets.symmetric(vertical: 6.h),
-        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+        margin: EdgeInsets.only(bottom: 16.h),
+        padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 14.h),
         constraints: BoxConstraints(maxWidth: 0.75.sw),
         decoration: BoxDecoration(
-          color: isSent ? const Color(0xFF49454F) : const Color(0xFFF6F6F6),
+          color: isMe ? AppColors.primary : AppColors.surfaceContainerHigh,
           borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(16.r),
-            topRight: Radius.circular(16.r),
-            bottomLeft: Radius.circular(isSent ? 16.r : 0),
-            bottomRight: Radius.circular(isSent ? 0 : 16.r),
+            topLeft: Radius.circular(24.r),
+            topRight: Radius.circular(24.r),
+            bottomLeft: Radius.circular(isMe ? 24.r : 4.r),
+            bottomRight: Radius.circular(isMe ? 4.r : 24.r),
           ),
         ),
         child: Text(
-          message,
+          message.content,
           style: TextStyle(
-            color: isSent ? Colors.white : const Color(0xFF49454F),
-            fontSize: 14.sp,
+            color: isMe ? AppColors.surface : AppColors.onSurface,
+            fontSize: 15.sp,
+            height: 1.4,
           ),
         ),
       ),

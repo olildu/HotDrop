@@ -11,8 +11,15 @@ import 'package:test_mobile/constants/globals.dart';
 import 'package:test_mobile/screens/main_screen.dart';
 import 'package:test_mobile/services/ble_peripheral_service.dart';
 import 'package:test_mobile/services/data_services.dart';
+import 'package:test_mobile/services/file_hosting_services.dart';
 import 'package:wifi_iot/wifi_iot.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+
+// REPOSITORY AND BLOC IMPORTS
+import 'package:test_mobile/injection_container.dart' as di;
+import 'package:test_mobile/blocs/session/session_cubit.dart';
+import 'package:test_mobile/data/repositories/chat_repository.dart';
+import 'package:test_mobile/data/repositories/file_repository.dart';
 
 class AndroidFunction {
   static const platform = MethodChannel('com.example.wifi_direct/channel');
@@ -21,7 +28,7 @@ class AndroidFunction {
     try {
       await WiFiForIoTPlugin.forceWifiUsage(false);
       await WiFiForIoTPlugin.disconnect();
-      await Future.delayed(const Duration(seconds: 1)); // Give OS time to release Wi-Fi
+      await Future.delayed(const Duration(seconds: 1));
 
       await platform.invokeMethod('stopLocalOnlyHotspot');
       await Future.delayed(const Duration(seconds: 1));
@@ -33,32 +40,10 @@ class AndroidFunction {
         String password = creds['password'];
         log("Hotspot Started: $ssid", name: "Host");
 
-        // NOTE: DO NOT call startServer here anymore.
+        String hostIp = await FileHostingService().getLocalIpAddress();
 
-        String hostIp = "192.168.43.1";
-        try {
-          // Give the hotspot 2 seconds to assign an IP to the network interface
-          await Future.delayed(const Duration(seconds: 2));
-
-          final interfaces = await NetworkInterface.list();
-          for (var interface in interfaces) {
-            for (var addr in interface.addresses) {
-              if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
-                if (addr.address.startsWith('192.168.') || addr.address.startsWith('10.')) {
-                  hostIp = addr.address;
-                }
-              }
-            }
-          }
-          log("Resolved Host IP: $hostIp", name: "Host");
-        } catch (e) {
-          log("Error finding Host IP: $e", name: "Host");
-        }
-
-        // FIX: Start the server AFTER resolving the IP, and pass the IP to it
         await DartFunction().startServer(hostIp);
 
-        // Finally, broadcast the credentials over BLE
         final connectionData = {"ssid": ssid, "password": password, "ip": hostIp};
         await BlePeripheralService().startAdvertising(connectionData);
 
@@ -81,84 +66,50 @@ class AndroidFunction {
 class ClientServices {
   Future<bool> connectToHostHotspot(String ssid, String password, String hostIp, {bool isAuto = false}) async {
     try {
-      log("Attempting to connect to Hotspot: $ssid", name: "Client");
+      log("Attempting to connect to Hotspot: $ssid (Auto: $isAuto)", name: "Client");
 
-      // 1. Attempt programmatic connection (Optimized for Android 10+)
+      // 1. Attempt programmatic connection
       bool connected = await WiFiForIoTPlugin.connect(
         ssid,
         password: password,
         security: NetworkSecurity.WPA,
         withInternet: false,
-        joinOnce: true, // CRITICAL: Forces the Android 10+ connection dialog
+        joinOnce: true,
       );
 
       if (connected) {
-        log("Successfully connected to Hotspot Wi-Fi programmatically!", name: "Client");
+        log("Successfully connected to Hotspot Wi-Fi!", name: "Client");
         await WiFiForIoTPlugin.forceWifiUsage(true);
-        await Future.delayed(const Duration(seconds: 4)); // Wait for DHCP
-
-        // Save credentials for future auto-reconnects
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('last_ssid', ssid);
-        await prefs.setString('last_password', password);
-        await prefs.setString('last_host_ip', hostIp);
+        // Wait for DHCP - shorter for auto
+        await Future.delayed(Duration(seconds: isAuto ? 2 : 4));
 
         return await connectToHostSocket(hostIp, isAuto: isAuto);
       } else {
-        // 2. ULTIMATE FALLBACK: Polling for manual connection
-        log("Programmatic connection blocked by Android OS. Triggering manual fallback.", name: "Client");
+        // FAIL FAST on Auto-reconnect to avoid blocking the app
+        if (isAuto) {
+          log("Auto-reconnect Wi-Fi failed. Aborting to prevent UI lag.", name: "Client");
+          return false;
+        }
 
+        // --- MANUAL FALLBACK (Only for user-initiated) ---
+        log("Triggering manual fallback for user-initiated connection.", name: "Client");
         if (navigatorKey.currentContext != null) {
-          // Copy password to clipboard
           await Clipboard.setData(ClipboardData(text: password));
-
           ScaffoldMessenger.of(navigatorKey.currentContext!).showSnackBar(
-            SnackBar(
-              content: Text("Auto-connect blocked. Password '$password' copied!\n\nPlease open your Wi-Fi settings and connect to '$ssid'."),
-              duration: const Duration(seconds: 10), // Give user time to read
-            ),
+            SnackBar(content: Text("Auto-connect blocked. Password '$password' copied!")),
           );
         }
 
-        // 3. SMART POLLING: Wait until the user actually connects to the correct Wi-Fi
-        bool userConnectedManually = false;
-        log("Waiting for user to connect manually to $ssid...", name: "Client");
-
+        // Long polling loop (30 seconds)
         for (int i = 0; i < 30; i++) {
-          // Poll for up to 30 seconds
           await Future.delayed(const Duration(seconds: 1));
-
           String? currentSsid = await WiFiForIoTPlugin.getSSID();
-          // Clean up quotes that Android sometimes adds around SSIDs
-          String cleanSsid = currentSsid?.replaceAll('"', '') ?? '';
-
-          if (cleanSsid == ssid) {
-            userConnectedManually = true;
-            break;
+          if ((currentSsid?.replaceAll('"', '') ?? '') == ssid) {
+            await Future.delayed(const Duration(seconds: 2));
+            return await connectToHostSocket(hostIp, isAuto: isAuto);
           }
         }
-
-        if (userConnectedManually) {
-          log("User successfully connected manually!", name: "Client");
-          // Give Android 3 seconds to assign an IP address via DHCP
-          await Future.delayed(const Duration(seconds: 3));
-
-          // Save credentials for future auto-reconnects
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('last_ssid', ssid);
-          await prefs.setString('last_password', password);
-          await prefs.setString('last_host_ip', hostIp);
-
-          return await connectToHostSocket(hostIp, isAuto: isAuto);
-        } else {
-          log("Timeout: User did not connect to the Hotspot within 30 seconds.", name: "Client");
-          if (navigatorKey.currentContext != null) {
-            ScaffoldMessenger.of(navigatorKey.currentContext!).showSnackBar(
-              const SnackBar(content: Text("Connection timeout. Please try scanning again.")),
-            );
-          }
-          return false;
-        }
+        return false;
       }
     } catch (e) {
       log("Error connecting to Wi-Fi: $e", name: "Client");
@@ -167,63 +118,49 @@ class ClientServices {
   }
 
   Future<bool> connectToHostSocket(String hostIp, {bool isAuto = false}) async {
+    // Reduce retries for background auto-reconnect
+    int maxRetries = isAuto ? 2 : 5;
     int retryCount = 0;
-    bool connected = false;
 
-    while (retryCount < 5 && !connected) {
+    while (retryCount < maxRetries) {
       try {
         retryCount++;
-        // Delay is crucial! Gives Android OS time to route traffic to the no-internet Wi-Fi
-        await Future.delayed(const Duration(seconds: 3));
+        // Delay before attempt - skip on first auto attempt
+        if (retryCount > 1 || !isAuto) await Future.delayed(const Duration(seconds: 2));
 
-        // Fallback: Get the actual gateway IP of the connected hotspot.
-        // This is often more reliable than the IP sent over BLE on newer Androids.
         String? gatewayIp = await NetworkInfo().getWifiGatewayIP();
         String targetIp = (gatewayIp != null && gatewayIp != "0.0.0.0") ? gatewayIp : hostIp;
 
-        log("Attempt $retryCount: Connecting to TCP Server at $targetIp:42069...", name: "Client");
+        log("Socket Attempt $retryCount: Connecting to $targetIp:42069...", name: "Client");
 
-        socket = await Socket.connect(targetIp, 42069, timeout: const Duration(seconds: 5));
+        socket = await Socket.connect(targetIp, 42069, timeout: const Duration(seconds: 3));
         connectedToPort = true;
-        connected = true;
-        log("Connected to Host Socket!", name: "Client");
 
-        if (navigatorKey.currentState != null) {
-          Future.delayed(const Duration(milliseconds: 100), () {
-            navigatorKey.currentState!.pushAndRemoveUntil(
-              MaterialPageRoute(builder: (context) => const MainScreen()),
-              (route) => false,
-            );
-          });
-        }
+        di.sl<SessionCubit>().updateConnectionStatus(true);
+        log("Connected to Host Socket!", name: "Client");
 
         socket!.listen(
           (data) {
             final message = String.fromCharCodes(data).trim();
-            log('Received: $message', name: "Client");
-            ReceivedDataParser().parseData(message);
+            ReceivedDataParser(di.sl<ChatRepository>(), di.sl<FileRepository>()).parseData(message);
           },
           onError: (e) {
-            log("Socket Error: $e", name: "Client");
             connectedToPort = false;
+            di.sl<SessionCubit>().updateConnectionStatus(false);
           },
           onDone: () {
-            log("Socket closed by host", name: "Client");
             connectedToPort = false;
+            di.sl<SessionCubit>().updateConnectionStatus(false);
           },
         );
-
         return true;
       } catch (e) {
-        log('Error connecting to socket (Attempt $retryCount): $e', name: "Client");
+        log('Socket attempt $retryCount failed: $e', name: "Client");
       }
     }
-
-    log("Failed to connect to socket after $retryCount attempts.", name: "Client");
     return false;
   }
 
-  // --- NEW: Auto Reconnect Function ---
   Future<bool> tryAutoReconnect() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -232,88 +169,14 @@ class ClientServices {
       String? hostIp = prefs.getString('last_host_ip');
 
       if (ssid != null && password != null && hostIp != null) {
-        log("Found previous session, attempting auto-reconnect...", name: "Client");
+        log("Previous session found. Attempting background reconnect...", name: "Client");
+        // isAuto: true triggers the high-speed logic
         return await connectToHostHotspot(ssid, password, hostIp, isAuto: true);
       }
     } catch (e) {
-      log("Auto-reconnect failed: $e", name: "Client");
+      log("Auto-reconnect aborted: $e", name: "Client");
     }
     return false;
-  }
-}
-
-class Permissions {
-  Future<void> requestPermissions() async {
-    // 1. Base permissions that don't change based on Android versions
-    List<Permission> permissions = [
-      Permission.location, // Note: You have coarse and fine in manifest
-      Permission.contacts,
-      Permission.camera,
-    ];
-
-    // 2. Android-specific logic
-    if (Platform.isAndroid) {
-      final androidInfo = await DeviceInfoPlugin().androidInfo;
-      final sdkInt = androidInfo.version.sdkInt;
-
-      // --- BLUETOOTH & WIFI LOGIC ---
-      if (sdkInt >= 31) {
-        // Android 12+ (API 31+) uses the new Bluetooth & Wifi permissions
-        permissions.addAll([
-          Permission.bluetoothScan,
-          Permission.bluetoothAdvertise,
-          Permission.bluetoothConnect,
-          Permission.nearbyWifiDevices,
-        ]);
-      } else {
-        // Android 11 and below (API 30 and below) uses the legacy Bluetooth permission
-        permissions.add(Permission.bluetooth);
-      }
-
-      // --- STORAGE LOGIC ---
-      // Note: If you truly need manageExternalStorage, you MUST add
-      // <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>
-      // to your AndroidManifest.xml. If you just need standard files, remove it entirely.
-      if (sdkInt < 33) {
-        // Android 12 and below use standard storage
-        permissions.add(Permission.storage);
-      } else {
-        // On Android 13+, Permission.storage is ignored. You must request
-        // Permission.photos, Permission.videos, or Permission.audio depending on your needs.
-        // Or if you are keeping manageExternalStorage, add it here:
-        // permissions.add(Permission.manageExternalStorage);
-      }
-    }
-
-    // 3. Request the dynamically built list
-    await permissions.request();
-  }
-
-  Future<void> ensureBlePermissions() async {
-    bool isGranted = true;
-
-    if (Platform.isAndroid) {
-      final androidInfo = await DeviceInfoPlugin().androidInfo;
-
-      if (androidInfo.version.sdkInt >= 31) {
-        // Android 12+ requires Scan and Connect
-        final scan = await Permission.bluetoothScan.request();
-        final connect = await Permission.bluetoothConnect.request();
-        if (scan != PermissionStatus.granted || connect != PermissionStatus.granted) {
-          isGranted = false;
-        }
-      } else {
-        // Android 11 and below requires Location to scan for BLE devices
-        final location = await Permission.location.request();
-        if (location != PermissionStatus.granted) {
-          isGranted = false;
-        }
-      }
-    }
-
-    if (!isGranted) {
-      throw Exception("BLE permissions not granted");
-    }
   }
 }
 
@@ -321,20 +184,12 @@ class DartFunction {
   ServerSocket? _serverSocket;
 
   Future<void> startServer(String hostIp, {int port = 42069}) async {
-    // Don't start if already running
-    if (_serverSocket != null) {
-      log("Server already running, skipping start.", name: "Server");
-      return;
-    }
+    if (_serverSocket != null) return;
 
     int retryCount = 0;
     while (retryCount < 5) {
       try {
-        _serverSocket = await ServerSocket.bind(
-          InternetAddress.anyIPv4,
-          port,
-          shared: true,
-        );
+        _serverSocket = await ServerSocket.bind(InternetAddress.anyIPv4, port, shared: true);
         log("TCP Server listening on $hostIp:$port", name: "Server");
 
         _serverSocket!.listen((client) {
@@ -344,20 +199,20 @@ class DartFunction {
         return;
       } catch (e) {
         retryCount++;
-        log("Server start attempt $retryCount failed: $e. Retrying in 2s...", name: "Server");
         await Future.delayed(const Duration(seconds: 2));
       }
     }
-    log("Failed to start server after multiple attempts.", name: "Server");
   }
 
   void handleClient(Socket client) {
     socket = client;
     connectedToPort = true;
 
+    // ---> FIX: Notify UI of connection
+    di.sl<SessionCubit>().updateConnectionStatus(true);
+
     BlePeripheralService().stopAdvertising();
 
-    // Force the Host's UI to refresh to the Main Screen, closing the QR code
     navigatorKey.currentState?.pushAndRemoveUntil(
       MaterialPageRoute(builder: (context) => const MainScreen()),
       (route) => false,
@@ -369,15 +224,19 @@ class DartFunction {
       (data) {
         final message = String.fromCharCodes(data).trim();
         log('Received: $message', name: "Server");
-        ReceivedDataParser().parseData(message);
+
+        // ---> FIX: Pass Repositories to Parser
+        ReceivedDataParser(di.sl<ChatRepository>(), di.sl<FileRepository>()).parseData(message);
       },
       onError: (e) {
         log("Socket Error: $e", name: "Server");
         connectedToPort = false;
+        di.sl<SessionCubit>().updateConnectionStatus(false);
       },
       onDone: () {
         log("Client disconnected", name: "Server");
         connectedToPort = false;
+        di.sl<SessionCubit>().updateConnectionStatus(false);
       },
     );
   }
@@ -398,5 +257,38 @@ class DartFunction {
         log("Send Error: $e", name: "Socket");
       }
     }
+  }
+}
+
+class Permissions {
+  Future<void> requestPermissions() async {
+    List<Permission> permissions = [Permission.location, Permission.contacts, Permission.camera];
+    if (Platform.isAndroid) {
+      final androidInfo = await DeviceInfoPlugin().androidInfo;
+      final sdkInt = androidInfo.version.sdkInt;
+      if (sdkInt >= 31) {
+        permissions.addAll([Permission.bluetoothScan, Permission.bluetoothAdvertise, Permission.bluetoothConnect, Permission.nearbyWifiDevices]);
+      } else {
+        permissions.add(Permission.bluetooth);
+      }
+      if (sdkInt < 33) permissions.add(Permission.storage);
+    }
+    await permissions.request();
+  }
+
+  Future<void> ensureBlePermissions() async {
+    bool isGranted = true;
+    if (Platform.isAndroid) {
+      final androidInfo = await DeviceInfoPlugin().androidInfo;
+      if (androidInfo.version.sdkInt >= 31) {
+        final scan = await Permission.bluetoothScan.request();
+        final connect = await Permission.bluetoothConnect.request();
+        if (scan != PermissionStatus.granted || connect != PermissionStatus.granted) isGranted = false;
+      } else {
+        final location = await Permission.location.request();
+        if (location != PermissionStatus.granted) isGranted = false;
+      }
+    }
+    if (!isGranted) throw Exception("BLE permissions not granted");
   }
 }

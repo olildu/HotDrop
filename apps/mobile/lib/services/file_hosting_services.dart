@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:developer' as dev;
 import 'dart:io';
-
 import 'package:test_mobile/services/connection_services.dart';
 
 class FileHostingService {
@@ -10,6 +9,9 @@ class FileHostingService {
   List<String> _downloadUrls = [];
   final int _port = 8080;
 
+  // ---> THIS IS THE MISSING FIELD <---
+  void Function(double)? onProgress;
+
   Future<void> startHosting(List<File> files) async {
     _selectedFiles = files;
     try {
@@ -17,10 +19,9 @@ class FileHostingService {
       _server = await HttpServer.bind(InternetAddress.anyIPv4, _port);
       dev.log("Server running on port ${_server!.port}", name: "FileHosting");
 
-      final ip = await _getLocalIpAddress();
+      final ip = await getLocalIpAddress();
       _downloadUrls = List.generate(files.length, (index) => 'http://$ip:${_server!.port}/download/$index');
 
-      // Send file info for each file
       for (int i = 0; i < files.length; i++) {
         DartFunction().sendDataToSocket(
           jsonEncode({
@@ -31,28 +32,35 @@ class FileHostingService {
             "file_type": files[i].path.split('.').last,
           }),
         );
-        await Future.delayed(const Duration(milliseconds: 500));
+        await Future.delayed(const Duration(milliseconds: 200));
       }
 
-      // Handle incoming requests
-      await for (HttpRequest request in _server!) {
+      int totalBytes = files.fold(0, (sum, f) => sum + f.lengthSync());
+      int bytesSent = 0;
+
+      _server!.listen((HttpRequest request) async {
         try {
           if (request.uri.path.startsWith('/download/')) {
             final index = int.tryParse(request.uri.pathSegments[1]) ?? -1;
             if (index >= 0 && index < _selectedFiles.length) {
               final file = _selectedFiles[index];
               dev.log("Serving file: ${file.path}", name: "FileHosting");
-              
-              final fileLength = file.lengthSync();
-              
+
               request.response.headers.contentType = ContentType.binary;
-              request.response.headers.contentLength = fileLength;
+              request.response.headers.contentLength = file.lengthSync();
               request.response.headers.add(
                 'Content-Disposition',
                 'attachment; filename="${file.path.split('/').last}"',
               );
-              
-              await request.response.addStream(file.openRead());
+
+              await for (var chunk in file.openRead()) {
+                request.response.add(chunk);
+                bytesSent += chunk.length;
+                if (totalBytes > 0) {
+                  // ---> THIS TRIGGERS THE PROGRESS BAR <---
+                  onProgress?.call(bytesSent / totalBytes);
+                }
+              }
             } else {
               request.response.statusCode = HttpStatus.notFound;
             }
@@ -61,11 +69,11 @@ class FileHostingService {
           }
           await request.response.close();
         } catch (e) {
-          dev.log("Error handling request: $e", name: "FileHosting");
+          dev.log("Error serving file: $e", name: "FileHosting");
           request.response.statusCode = HttpStatus.internalServerError;
           await request.response.close();
         }
-      }
+      });
     } catch (e) {
       dev.log("Error starting server: $e", name: "FileHosting");
       _downloadUrls.clear();
@@ -75,33 +83,56 @@ class FileHostingService {
 
   Future<void> _stopHosting() async {
     if (_server != null) {
-      await _server!.close();
+      await _server!.close(force: true);
       _server = null;
-      dev.log("Server stopped", name: "FileHosting");
     }
     _downloadUrls.clear();
   }
 
-  Future<String> _getLocalIpAddress() async {
+  Future<String> getLocalIpAddress() async {
     final interfaces = await NetworkInterface.list();
+    String? hotspotIp;
+    String? wifiIp;
+    String? fallback;
+
     for (var interface in interfaces) {
+      print(interface.name);
+      print(interface.addresses);
       for (var addr in interface.addresses) {
-        if (!addr.isLoopback && addr.type == InternetAddressType.IPv4) {
-          return addr.address;
+        if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
+          final ip = addr.address;
+
+          // 1. HIGHEST PRIORITY: Interface contains 'ap', 'softap', or 'wlan1'
+          if (interface.name.contains('ap') || interface.name.contains('wlan1') || interface.name.contains('softap')) {
+            return ip;
+          }
+
+          // 2. SECOND PRIORITY: Subnets typical for Android Hotspots
+          if (ip.startsWith('192.168.43.') || ip.startsWith('192.168.44.')) {
+            hotspotIp = ip;
+          }
+
+          // 3. THIRD PRIORITY: Other local Wi-Fi
+          else if (ip.startsWith('192.168.')) {
+            wifiIp = ip;
+          }
+
+          // 4. LAST RESORT: Any non-loopback IP
+          else {
+            fallback = ip;
+          }
         }
       }
     }
-    return '0.0.0.0';
+
+    return hotspotIp ?? wifiIp ?? fallback ?? '0.0.0.0';
   }
 
   List<String> get downloadUrls => _downloadUrls;
   List<File> get selectedFiles => _selectedFiles;
 
-  Future<void> dispose() async {
-    await _stopHosting();
+  void dispose() {
+    _stopHosting();
     _selectedFiles.clear();
-    _downloadUrls.clear();
-    _server = null;
-    dev.log("FileHostingService disposed", name: "FileHosting");
   }
 }

@@ -2,20 +2,27 @@ import 'dart:convert';
 import 'dart:developer';
 import 'dart:io';
 import 'package:flutter_contacts/contact.dart';
-import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
-import 'package:test_mobile/constants/globals.dart';
-import 'package:test_mobile/providers/file_detail_provider.dart';
-import 'package:test_mobile/providers/message_provider.dart';
-import 'package:test_mobile/screens/hotdrop_screen.dart';
+import 'package:test_mobile/blocs/hotdrop_cubit.dart'; // Required for progress updates
+import 'package:test_mobile/blocs/message_cubit.dart';
+import 'package:test_mobile/data/models/file_model.dart';
+import 'package:test_mobile/data/repositories/chat_repository.dart';
+import 'package:test_mobile/data/repositories/file_repository.dart';
+import 'package:test_mobile/injection_container.dart' as di; // Use GetIt
 import 'package:test_mobile/services/connection_services.dart';
-import 'package:test_mobile/services/message_storage_service.dart';
+import 'package:test_mobile/services/file_hosting_services.dart';
 
 class ReceivedDataParser {
+  final ChatRepository _chatRepository;
+  final FileRepository _fileRepository;
+
+  ReceivedDataParser(this._chatRepository, this._fileRepository);
+
   void parseData(String data) {
-    // Handle potentially grouped JSON strings separated by newlines
-    List<String> messages = data.split('\n');
+    // FIX: Handle clumped JSON objects (e.g., "{...}{...}") by inserting newlines before parsing
+    String sanitizedData = data.replaceAll('}{', '}\n{');
+    List<String> messages = sanitizedData.split('\n');
 
     for (String msg in messages) {
       if (msg.trim().isEmpty) continue;
@@ -24,111 +31,115 @@ class ReceivedDataParser {
         var parsedData = jsonDecode(msg);
 
         if (parsedData["type"] == "message") {
-          String messageContent = parsedData["content"];
-          Provider.of<MessageProvider>(navigatorKey.currentContext!, listen: false).addMessage(messageContent, false);
-          MessageStorageService().saveMessage(messageContent, false, DateTime.now());
+          final content = parsedData["content"];
+          di.sl<ChatRepository>().onMessageReceived(content);
         } else if (parsedData["type"] == "HotDropFile") {
-          // Trigger HTTP Download for the receiver
           _downloadFileFromHost(parsedData["url"], parsedData["name"], parsedData["size"]);
+        }
+        // FIX: Match the actual type "downloadProgress" seen in logs
+        else if (parsedData["type"] == "progress") {
+          // Parse string percentage (e.g., "0.27") to double
+          final String rawPercent = parsedData["progress_percent"] ?? "0.0";
+          double progressValue = double.tryParse(rawPercent) ?? 0.0;
+
+          // Scale 0-100 down to 0.0-1.0 for the LinearProgressIndicator
+          double normalizedProgress = (progressValue / 100.0).clamp(0.0, 1.0);
+
+          log("Updating UI progress to: ${(normalizedProgress * 100).toInt()}%", name: "Parser");
+          di.sl<HotDropCubit>().updateProgress(normalizedProgress);
         } else if (parsedData["type"] == "downloadComplete") {
-          // Logic for the SENDER: The receiver has finished downloading your file
-          if (hotdropScreenKey.currentState != null) {
-            HotdopScreenScreenState state = hotdropScreenKey.currentState!;
-            state.uploadComplete = true;
-            state.isUploading = false;
-            state.updateState(state.uploadComplete);
+          di.sl<HotDropCubit>().completeTransfer();
 
-            // Find the local path of the file you just sent so you can open it later
-            final String fileName = parsedData["name"];
-            final hostedFile = state.fileHostingService.selectedFiles.firstWhere(
-              (file) => file.path.split('/').last == fileName,
-              orElse: () => File(''),
-            );
+          final hostingService = di.sl<FileHostingService>();
+          final String fileName = parsedData["name"];
 
-            FileDetailProvider fileProvider = Provider.of<FileDetailProvider>(navigatorKey.currentContext!, listen: false);
-            fileProvider.addFileDetail(
-              fileName: fileName,
-              fileSize: parsedData["size"],
-              isSent: true,
-              timestamp: DateTime.now(),
-              transferSpeed: (parsedData["transfer_speed"] ?? 0.0).toDouble(),
-              filePath: hostedFile.path.isNotEmpty ? hostedFile.path : null, // Store sender path
-            );
-          }
+          final hostedFile = hostingService.selectedFiles.firstWhere(
+            (file) => file.path.split('/').last == fileName,
+            orElse: () => File(''),
+          );
+
+          final fileModel = FileModel(
+            name: fileName,
+            size: parsedData["size"],
+            timestamp: DateTime.now(),
+            transferSpeed: (parsedData["transfer_speed"] ?? 0.0).toDouble(),
+            isSent: true,
+            path: hostedFile.path.isNotEmpty ? hostedFile.path : null,
+          );
+
+          _fileRepository.onFileProcessed(fileModel);
         }
       } catch (e) {
-        log("Error parsing data: $e");
+        log("Error parsing incoming socket data: $e");
       }
     }
   }
 
+  /// Handles the actual HTTP download when another device sends a file to this mobile app
   Future<void> _downloadFileFromHost(String url, String fileName, int fileSize) async {
     try {
-      log("Starting download for $fileName from $url", name: "Downloader");
       final stopwatch = Stopwatch()..start();
-
       final request = http.Request('GET', Uri.parse(url));
       final response = await http.Client().send(request);
 
       if (response.statusCode == 200) {
-        // Save to app's document directory
         final directory = await getApplicationDocumentsDirectory();
-        final savePath = '${directory.path}/HotDrop';
-        final dir = Directory(savePath);
-        if (!await dir.exists()) {
-          await dir.create(recursive: true);
-        }
+        final file = File('${directory.path}/HotDrop/$fileName');
+        if (!await file.parent.exists()) await file.parent.create(recursive: true);
 
-        final file = File('$savePath/$fileName');
         final sink = file.openWrite();
-
         int downloadedBytes = 0;
+        double lastSentProgress = 0.0; // Track for throttling
 
-        await response.stream.listen(
-          (chunk) {
-            downloadedBytes += chunk.length;
-            sink.add(chunk);
-          },
-          onError: (e) => log("Error while streaming: $e"),
-          cancelOnError: true,
-        ).asFuture();
+        await response.stream.listen((chunk) {
+          downloadedBytes += chunk.length;
+          sink.add(chunk);
+
+          // IMPLEMENTED: Throttled progress sending
+          double currentProgress = (downloadedBytes / fileSize) * 100;
+          if (currentProgress - lastSentProgress >= 1.0 || currentProgress >= 99.9) {
+            lastSentProgress = currentProgress;
+            DartFunction().sendDataToSocket(jsonEncode({
+              "type": "progress",
+              "progress_percent": currentProgress.toStringAsFixed(2),
+              "name": fileName,
+            }));
+          }
+        }).asFuture();
 
         await sink.flush();
         await sink.close();
         stopwatch.stop();
 
-        final elapsedTimeInSeconds = stopwatch.elapsedMilliseconds / 1000;
-        final downloadSpeed = (downloadedBytes / elapsedTimeInSeconds);
+        final speed = downloadedBytes / (stopwatch.elapsedMilliseconds / 1000);
 
-        log("File downloaded successfully to ${file.path}");
-
-        // Logic for the RECEIVER: Save the file detail with the local download path
-        Provider.of<FileDetailProvider>(navigatorKey.currentContext!, listen: false).addFileDetail(
-          fileName: fileName,
-          fileSize: fileSize,
-          isSent: false,
+        final fileModel = FileModel(
+          name: fileName,
+          size: fileSize,
           timestamp: DateTime.now(),
-          transferSpeed: downloadSpeed,
-          filePath: file.path, // Store receiver path
+          transferSpeed: speed,
+          isSent: false,
+          path: file.path,
         );
 
-        // Notify Host that download is complete
-        DartFunction().sendDataToSocket(jsonEncode({"type": "downloadComplete", "name": fileName, "size": fileSize, "transfer_speed": downloadSpeed}));
-      } else {
-        log("Failed to download file: ${response.statusCode}");
+        _fileRepository.onFileProcessed(fileModel);
+
+        // Notify the Sender (Host) that we have finished the download
+        DartFunction().sendDataToSocket(jsonEncode({"type": "downloadComplete", "name": fileName, "size": fileSize, "transfer_speed": speed}));
       }
     } catch (e) {
-      log("Error downloading file: $e");
+      log("Download error: $e");
     }
   }
 }
 
 class OutgoingDataParser {
+  /// Encapsulates a text message into JSON for transmission over the socket
   void parseMessages(String message) {
-    Provider.of<MessageProvider>(navigatorKey.currentContext!, listen: false).addMessage(message, true);
-    DartFunction().sendDataToSocket(jsonEncode({"type": "message", "format": "string", "content": message}));
+    DartFunction().sendDataToSocket(jsonEncode({"type": "message", "content": message}));
   }
 
+  /// Encapsulates contact information for initial device handshakes
   Future<void> parseContacts(List<Contact> contacts) async {
     DartFunction().sendDataToSocket(jsonEncode({
       "type": "contacts",

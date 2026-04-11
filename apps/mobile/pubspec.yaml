@@ -60,6 +60,8 @@ dependencies:
   device_info_plus: ^12.4.0
   flutter_ble_peripheral: ^2.1.0
   ble_peripheral: ^2.4.0
+  flutter_bloc: ^9.1.1
+  get_it: ^9.2.1
 
 dev_dependencies:
   flutter_test:

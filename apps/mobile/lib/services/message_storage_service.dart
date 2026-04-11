@@ -1,34 +1,21 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../data/models/message_model.dart';
 
 class MessageStorageService {
-  static const _messagesKey = 'chat_messages';
+  static const _key = 'chat_messages';
 
-  Future<void> saveMessage(String content, bool isSent, DateTime timestamp) async {
+  Future<void> saveMessage(MessageModel message) async {
     final prefs = await SharedPreferences.getInstance();
-    final existingMessages = await loadMessages();
-
-    existingMessages.add({
-      'content': content,
-      'isSent': isSent,
-      'timestamp': timestamp.toIso8601String(),
-    });
-
-    final jsonString = jsonEncode(existingMessages);
-    await prefs.setString(_messagesKey, jsonString);
+    final messages = await loadMessages();
+    messages.add(message);
+    await prefs.setString(_key, jsonEncode(messages.map((m) => m.toJson()).toList()));
   }
 
-  Future<List<Map<String, dynamic>>> loadMessages() async {
+  Future<List<MessageModel>> loadMessages() async {
     final prefs = await SharedPreferences.getInstance();
-    final jsonString = prefs.getString(_messagesKey);
-    if (jsonString != null) {
-      return List<Map<String, dynamic>>.from(jsonDecode(jsonString));
-    }
-    return [];
-  }
-
-  Future<void> clearMessages() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_messagesKey);
+    final data = prefs.getString(_key);
+    if (data == null) return [];
+    return (jsonDecode(data) as List).map((m) => MessageModel.fromJson(m)).toList();
   }
 }
