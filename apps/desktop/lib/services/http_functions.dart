@@ -10,7 +10,6 @@ import 'package:test/providers/popup_provider.dart';
 import 'package:test/services/connection_services.dart';
 
 class HttpFunctions {
-
   Future<String?> downloadFile(String url, String fileName) async {
     try {
       final stopwatch = Stopwatch()..start();
@@ -42,6 +41,12 @@ class HttpFunctions {
               final progress = downloadedBytes / totalBytes;
               final progressPercent = (progress * 100).toStringAsFixed(2);
               log("Downloading... $progressPercent%");
+              DartFunction().sendMessage(jsonEncode({
+                "type": "progress",
+                "progress_percent": progressPercent,
+                "file_name": fileName,
+              }));
+
               navigatorKey.currentContext!.read<PopupProvider>().updateProgress(progress);
             } else {
               log("Downloading... unknown%");
@@ -65,8 +70,8 @@ class HttpFunctions {
         log("Average download speed: ${(downloadSpeed / 1024).toStringAsFixed(2)} KB/s");
 
         navigatorKey.currentContext!.read<PopupProvider>().show("Download complete!", Icons.check_circle_outline);
-        
-        DartFunction().sendMessage(jsonEncode({"type": "downloadComplete", "transfer_speed" : downloadSpeed, "name": fileName, "size" : totalBytes}));
+
+        DartFunction().sendMessage(jsonEncode({"type": "downloadComplete", "transfer_speed": downloadSpeed, "name": fileName, "size": totalBytes}));
 
         return filePath;
       } else {

@@ -233,37 +233,19 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
   Future<bool> _connectToWindowsWifi(String ssid, String password) async {
     setState(() => loadingStatus = "Connecting to Wi-Fi: $ssid...");
 
-    // PowerShell script to dynamically generate a WLAN XML profile, import it, connect, and VERIFY
+    // PowerShell script to generate a profile, connect, and VERIFY using string output
     final psScript = '''
-      \$ErrorActionPreference = 'Stop'
-      \$ssid = "$ssid"
-      \$password = "$password"
-      
-      Write-Output "Scanning network security type..."
-      \$authType = "WPA2PSK" # Default fallback
-      
-      # Check if the network is broadcasting as WPA3
-      \$networks = netsh wlan show networks
-      \$currentSsid = ""
-      foreach (\$line in \$networks) {
-          if (\$line -match "SSID\\s+\\d+\\s+:\\s+(.*)") {
-              \$currentSsid = \$matches[1].Trim()
-          }
-          if (\$currentSsid -eq \$ssid -and \$line -match "Authentication\\s+:\\s+(.*)") {
-              \$authRaw = \$matches[1].Trim()
-              if (\$authRaw -match "WPA3") {
-                  \$authType = "WPA3SAE"
-              }
-              break
-          }
-      }
+    \$ErrorActionPreference = 'SilentlyContinue'
+    \$ssid = "$ssid"
+    \$password = "$password"
+    
+    Write-Output "Step 1: Preparing profile for \$ssid"
+    \$authType = "WPA2PSK" 
 
-      Write-Output "Detected Auth Type: \$authType"
+    # Convert SSID to Hex to avoid XML parsing errors
+    \$hexSsid = [System.BitConverter]::ToString([System.Text.Encoding]::UTF8.GetBytes(\$ssid)).Replace('-', '')
 
-      # Convert SSID to Hex to avoid XML parsing errors with spaces/special characters
-      \$hexSsid = [System.BitConverter]::ToString([System.Text.Encoding]::UTF8.GetBytes(\$ssid)).Replace('-', '')
-
-      \$xml = @"
+    \$xml = @"
 <?xml version="1.0"?>
 <WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
     <name>\$ssid</name>
@@ -291,51 +273,64 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
     </MSM>
 </WLANProfile>
 "@
-      
-      \$xmlPath = "\$env:TEMP\\hotdrop_wifi_profile.xml"
-      
-      # Write the file using .NET to prevent PowerShell from adding a UTF-8 BOM
-      [System.IO.File]::WriteAllText(\$xmlPath, \$xml)
-      
-      Write-Output "Adding profile to Windows..."
-      netsh wlan add profile filename="\$xmlPath" | Out-Null
-      
-      Write-Output "Attempting to connect..."
-      \$connectOutput = netsh wlan connect name="\$ssid" 2>&1
-      Write-Output \$connectOutput
-      
-      Remove-Item -Path \$xmlPath
+    
+    try {
+        \$xmlPath = "\$env:TEMP\\hotdrop_wifi_profile.xml"
+        [System.IO.File]::WriteAllText(\$xmlPath, \$xml)
+        
+        Write-Output "Step 2: Adding profile to Windows..."
+        netsh wlan add profile filename="\$xmlPath" | Out-Null
+        Remove-Item -Path \$xmlPath
 
-      Write-Output "Verifying actual connection state (waiting up to 10s)..."
-      \$connected = \$false
-      for (\$i = 0; \$i -lt 10; \$i++) {
-          Start-Sleep -Seconds 1
-          \$status = netsh wlan show interfaces
-          
-          # Check if the interface state is 'connected' AND the SSID matches
-          if (\$status -match "State\\s+:\\s+connected" -and \$status -match "SSID\\s+:\\s+\$ssid") {
-              \$connected = \$true
-              break
-          }
-      }
+        Write-Output "Step 3: Sending connect command..."
+        \$connectOutput = netsh wlan connect name="\$ssid" 2>&1
+        Write-Output "Connect Command Output: \$connectOutput"
 
-      if (-not \$connected) {
-          Write-Error "Failed to verify connection to \$ssid. Network might be out of range, or password incorrect."
-      }
-    ''';
+        Write-Output "Step 4: Verifying actual connection state (waiting up to 25s)..."
+        \$connected = \$false
+        for (\$i = 1; \$i -le 25; \$i++) {
+            Start-Sleep -Seconds 1
+            
+            # FIX: We must use '| Out-String' so that \$status is a single string.
+            # Without this, netsh returns an array, and \$matches[1] will crash.
+            \$status = netsh wlan show interfaces | Out-String
+            
+            \$currentState = "unknown"
+            if (\$status -match "State\\s+:\\s+(.*)") {
+                \$currentState = \$matches[1].Trim()
+            }
+            
+            Write-Output "  [Sec \$i] State: \$currentState"
+
+            if (\$currentState -eq "connected" -and \$status -match "SSID\\s+:\\s+\$ssid") {
+                \$connected = \$true
+                Write-Output "Success: Connected to \$ssid"
+                break
+            }
+        }
+
+        if (-not \$connected) {
+            Write-Output "Error: Failed to verify connection to \$ssid. Final state: \$currentState"
+            exit 1
+        }
+    } catch {
+        Write-Output "Exception occurred: \$(\$_.ToString())"
+        exit 1
+    }
+  ''';
 
     try {
       final result = await Process.run('powershell.exe', ['-NoProfile', '-Command', psScript]);
 
       if (result.stdout.toString().isNotEmpty) {
-        log("Wi-Fi Setup Log:\n${result.stdout.toString().trim()}");
+        log("--- Wi-Fi Connection Log ---\n${result.stdout.toString().trim()}", name: "WIFI_DEBUG");
       }
 
       if (result.exitCode == 0) {
         log("Successfully verified connection to Wi-Fi: $ssid");
         return true;
       } else {
-        log("Wi-Fi connection failed: \n${result.stderr}");
+        log("Wi-Fi connection failed. Stderr: \n${result.stderr}");
         return false;
       }
     } catch (e) {
