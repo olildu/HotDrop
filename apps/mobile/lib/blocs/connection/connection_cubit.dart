@@ -50,7 +50,7 @@ class ConnectionCubit extends Cubit<ConnectionCubitState> {
   StreamSubscription? _scanSubscription;
 
   // UUIDs must match your BlePeripheralService
-  static const String _serviceUuid = "0000FFFF-0000-1000-8000-00805F9B34FB";
+  static const String _serviceUuid = "0000ABCD-0000-1000-8000-00805F9B34FB";
   static const String _charUuid = "0000FFFE-0000-1000-8000-00805F9B34FB";
 
   ConnectionCubit(this._repository) : super(ConnectionCubitState(status: ConnectionStatus.idle));
