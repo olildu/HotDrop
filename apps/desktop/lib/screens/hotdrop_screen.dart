@@ -2,15 +2,16 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:gap/gap.dart';
 import 'package:open_filex/open_filex.dart';
-import 'package:provider/provider.dart';
-import 'package:test/constants/globals.dart' as globals;
-import 'package:test/providers/hotdrop_provider.dart';
-import 'package:test/services/connection_services.dart';
-import 'package:test/services/file_server_service.dart';
-import 'package:test/utils/common/search_bar.dart';
+import '../blocs/hotdrop_cubit.dart';
+import '../data/models/file_model.dart';
+import '../constants/globals.dart' as globals;
+import '../services/connection_services.dart';
+import '../services/file_server_service.dart';
+import '../utils/common/search_bar.dart';
 
 class HotdropScreen extends StatefulWidget {
   const HotdropScreen({super.key});
@@ -24,23 +25,21 @@ class _HotdropScreenState extends State<HotdropScreen> {
 
   Future<void> _pickAndSendFile() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles();
-
     if (result != null && result.files.single.path != null) {
-      File file = File(result.files.single.path!); // Get the file object
+      File file = File(result.files.single.path!);
       String filePath = result.files.single.path!;
       String fileName = result.files.single.name;
-      int fileSize = await file.length(); // Get the size in bytes
+      int fileSize = await file.length();
 
       if (globals.currentServerIp == null) return;
 
       String? fileUrl = await FileServerService().startFileServer(filePath, globals.currentServerIp!);
 
       if (fileUrl != null) {
-        // Add the "size" key to the JSON
         await DartFunction().sendMessage(jsonEncode({
           "type": "HotDropFile",
           "name": fileName,
-          "size": fileSize, // Now sending the size
+          "size": fileSize,
           "url": fileUrl,
         }));
       }
@@ -58,34 +57,12 @@ class _HotdropScreenState extends State<HotdropScreen> {
       case 'xls':
       case 'xlsx':
         return Icons.grid_on_rounded;
-      case 'ppt':
-      case 'pptx':
-        return Icons.slideshow_rounded;
-      case 'zip':
-      case 'rar':
-      case '7z':
-        return Icons.attach_file_rounded;
-      case 'mp3':
-      case 'wav':
-      case 'ogg':
-        return Icons.music_note_rounded;
-      case 'mp4':
-      case 'avi':
-      case 'mov':
-      case 'mkv':
-        return Icons.videocam_rounded;
       case 'jpg':
       case 'jpeg':
       case 'png':
-      case 'gif':
-      case 'bmp':
         return Icons.image_rounded;
-      case 'txt':
-        return Icons.note_alt_rounded;
-      case 'apk':
-        return Icons.android_rounded;
-      case 'exe':
-        return Icons.computer_rounded;
+      case 'mp4':
+        return Icons.videocam_rounded;
       default:
         return Icons.insert_drive_file_rounded;
     }
@@ -93,161 +70,70 @@ class _HotdropScreenState extends State<HotdropScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final HotdropProvider hotdropProvider = Provider.of<HotdropProvider>(context, listen: true);
-
-    final filteredFiles = hotdropProvider.files.where((file) {
-      final name = file["name"].toString().toLowerCase();
-      return name.contains(searchQuery.toLowerCase());
-    }).toList();
-
     return Column(
       children: [
         Container(
           decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: const Color.fromARGB(255, 231, 231, 231),
-                width: 1.w,
-              ),
-            ),
+            border: Border(bottom: BorderSide(color: const Color(0xFFE7E7E7), width: 1.w)),
           ),
           child: AppBar(
             backgroundColor: Colors.white,
             actions: [
-              IconButton(
-                icon: const Icon(Icons.upload_file),
-                onPressed: () => _pickAndSendFile(),
-              ),
+              IconButton(icon: const Icon(Icons.upload_file), onPressed: _pickAndSendFile),
             ],
-            title: SizedBox(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    padding: EdgeInsets.zero,
-                    splashColor: Colors.transparent,
-                    highlightColor: Colors.transparent,
-                    hoverColor: Colors.transparent,
-                    onPressed: () {
-                      // Provider.of<PopupProvider>(context, listen: false).showTest();
-                    },
-                    icon: Icon(Icons.arrow_back_ios_new_rounded, size: 15.sp),
-                  ),
-                  IconButton(
-                    padding: EdgeInsets.zero,
-                    splashColor: Colors.transparent,
-                    highlightColor: Colors.transparent,
-                    hoverColor: Colors.transparent,
-                    onPressed: () {},
-                    icon: Icon(Icons.arrow_forward_ios_rounded, size: 15.sp),
-                  ),
-                  Gap(20.w),
-                  Text(
-                    "HotDrop",
-                    style: TextStyle(fontSize: 20.sp),
-                  ),
-                  const Spacer(),
-
-                  // Search Bar
-                  SearchInput(
-                    onChanged: (value) {
-                      setState(() {
-                        searchQuery = value;
-                      });
-                    },
-                  )
-                ],
-              ),
+            title: Row(
+              children: [
+                IconButton(icon: Icon(Icons.arrow_back_ios_new_rounded, size: 15.sp), onPressed: () {}),
+                IconButton(icon: Icon(Icons.arrow_forward_ios_rounded, size: 15.sp), onPressed: () {}),
+                Gap(20.w),
+                Text("HotDrop", style: TextStyle(fontSize: 20.sp)),
+                const Spacer(),
+                SearchInput(onChanged: (value) => setState(() => searchQuery = value)),
+              ],
             ),
           ),
         ),
-
-        // Files Grid
         Expanded(
-          child: GridView.builder(
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 6,
-              crossAxisSpacing: 20,
-              mainAxisSpacing: 20,
-              childAspectRatio: 1,
-            ),
-            itemCount: filteredFiles.length,
-            padding: EdgeInsets.all(10.sp),
-            itemBuilder: (context, index) {
-              final fileName = filteredFiles[index]["name"];
-              final filePath = filteredFiles[index]["location"];
-              return GestureDetector(
-                onTap: () async {
-                  await OpenFilex.open(filePath);
-                },
-                onSecondaryTapDown: (TapDownDetails details) {
-                  showMenu(
-                    context: context,
-                    color: Colors.white,
-                    position: RelativeRect.fromLTRB(
-                      details.globalPosition.dx,
-                      details.globalPosition.dy,
-                      details.globalPosition.dx,
-                      details.globalPosition.dy,
-                    ),
-                    items: [
-                      PopupMenuItem(
-                        child: Text('Open file location'),
-                        onTap: () {
-                          final directoryPath = File(filePath).parent.path;
-                          OpenFilex.open(directoryPath);
-                        },
-                      ),
-                      PopupMenuItem(
-                        child: Text('Delete'),
-                        onTap: () {
-                          File(filePath).deleteSync();
-                        },
-                      ),
-                    ],
-                  );
-                },
-                child: Column(
-                  children: [
-                    // File Icon
-                    Expanded(
-                      flex: 3,
-                      child: Container(
-                        width: 100.w,
-                        height: 100.h,
-                        decoration: BoxDecoration(
-                          color: Colors.grey[200],
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.grey[400]!),
-                        ),
-                        child: Center(
-                          child: Icon(
-                            _getFileIcon(fileName),
-                            size: 40.sp,
-                            color: Colors.grey[700],
+          child: BlocBuilder<HotdropCubit, List<FileModel>>(
+            builder: (context, files) {
+              final filteredFiles = files.where((file) {
+                return file.name.toLowerCase().contains(searchQuery.toLowerCase());
+              }).toList();
+
+              return GridView.builder(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 6,
+                  crossAxisSpacing: 20,
+                  mainAxisSpacing: 20,
+                  childAspectRatio: 1,
+                ),
+                itemCount: filteredFiles.length,
+                padding: EdgeInsets.all(10.sp),
+                itemBuilder: (context, index) {
+                  final file = filteredFiles[index];
+                  return GestureDetector(
+                    onTap: () async {
+                      if (file.location != null) await OpenFilex.open(file.location!);
+                    },
+                    child: Column(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.grey[200],
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.grey[400]!),
+                            ),
+                            child: Center(child: Icon(_getFileIcon(file.name), size: 40.sp)),
                           ),
                         ),
-                      ),
+                        Gap(10.h),
+                        Expanded(child: Text(file.name, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis)),
+                      ],
                     ),
-
-                    Gap(10.h),
-
-                    // File name
-                    Expanded(
-                      child: Text(
-                        fileName,
-                        style: TextStyle(
-                          fontSize: 13.sp,
-                          color: Colors.black87,
-                          fontWeight: FontWeight.w400,
-                        ),
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
+                  );
+                },
               );
             },
           ),

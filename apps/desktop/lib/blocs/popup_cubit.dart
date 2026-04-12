@@ -1,0 +1,59 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+class PopupState {
+  final bool showPopup;
+  final String message;
+  final IconData icon;
+  final double progress;
+
+  PopupState({
+    this.showPopup = false,
+    this.message = "You have a new message",
+    this.icon = Icons.message_rounded,
+    this.progress = -1,
+  });
+
+  PopupState copyWith({
+    bool? showPopup,
+    String? message,
+    IconData? icon,
+    double? progress,
+  }) {
+    return PopupState(
+      showPopup: showPopup ?? this.showPopup,
+      message: message ?? this.message,
+      icon: icon ?? this.icon,
+      progress: progress ?? this.progress,
+    );
+  }
+}
+
+class PopupCubit extends Cubit<PopupState> {
+  PopupCubit() : super(PopupState());
+
+  Timer? _hideTimer;
+
+  void show(String msg, IconData icon, {double progress = -1}) {
+    _hideTimer?.cancel();
+    emit(state.copyWith(
+      message: msg,
+      icon: icon,
+      progress: progress,
+      showPopup: true,
+    ));
+
+    if (progress == -1) {
+      _hideTimer = Timer(const Duration(seconds: 3), hide);
+    }
+  }
+
+  void updateProgress(double value) {
+    emit(state.copyWith(progress: value, showPopup: true));
+  }
+
+  void hide() {
+    emit(state.copyWith(showPopup: false, progress: -1));
+  }
+}

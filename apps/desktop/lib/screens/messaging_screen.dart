@@ -1,12 +1,10 @@
-import 'dart:developer';
-
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:test/providers/message_provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:gap/gap.dart';
-import 'package:test/services/data_services.dart';
+import '../blocs/message_cubit.dart';
+import '../data/models/message_model.dart';
 
 class MessagingScreen extends StatefulWidget {
   const MessagingScreen({super.key});
@@ -26,19 +24,30 @@ class MessagingScreenState extends State<MessagingScreen> {
     super.dispose();
   }
 
+  void _handleSend() {
+    if (_messageController.text.trim().isNotEmpty) {
+      context.read<MessageCubit>().sendMessage(_messageController.text.trim());
+      _messageController.clear();
+      _scrollToBottom();
+    }
+  }
+
   void _scrollToBottom() {
-    _scrollController.animateTo(
-      _scrollController.position.maxScrollExtent,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOut,
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // AppBar and messages list
         Container(
           decoration: BoxDecoration(
             border: Border(
@@ -50,89 +59,54 @@ class MessagingScreenState extends State<MessagingScreen> {
           ),
           child: AppBar(
             backgroundColor: Colors.white,
-            title: SizedBox(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    padding: EdgeInsets.zero,
-                    splashColor: Colors.transparent,
-                    highlightColor: Colors.transparent,
-                    hoverColor: Colors.transparent,
-                    onPressed: () {},
-                    icon: Icon(Icons.arrow_back_ios_new_rounded, size: 15.sp),
-                  ),
-                  IconButton(
-                    padding: EdgeInsets.zero,
-                    splashColor: Colors.transparent,
-                    highlightColor: Colors.transparent,
-                    hoverColor: Colors.transparent,
-                    onPressed: () {},
-                    icon: Icon(Icons.arrow_forward_ios_rounded, size: 15.sp),
-                  ),
-                  Gap(20.w),
-                  Text(
-                    "Messaging", 
-                    style: TextStyle(fontSize: 20.sp),
-                  ),
-                ],
-              ),
+            title: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(icon: Icon(Icons.arrow_back_ios_new_rounded, size: 15.sp), onPressed: () {}),
+                IconButton(icon: Icon(Icons.arrow_forward_ios_rounded, size: 15.sp), onPressed: () {}),
+                Gap(20.w),
+                Text("Messaging", style: TextStyle(fontSize: 20.sp)),
+              ],
             ),
           ),
         ),
-    
-        // ListView of messages
         Expanded(
-          child: Consumer<MessageProvider>(
-            builder: (context, messageProvider, child) {
+          child: BlocBuilder<MessageCubit, List<MessageModel>>(
+            builder: (context, messages) {
               return ListView.builder(
                 controller: _scrollController,
-                itemCount: messageProvider.messages.length,
+                itemCount: messages.length,
                 itemBuilder: (context, index) {
-                  log(messageProvider.messages.toString());
                   return _MessageBubble(
-                    message: messageProvider.messages[index]["message"],
-                    isSent: messageProvider.messages[index]["sender"] == "Me",
+                    message: messages[index].message,
+                    isSent: messages[index].sender == "Me",
                   );
                 },
               );
             },
           ),
         ),
-    
-        // Input bar section
         Container(
           padding: EdgeInsets.all(8.w),
           decoration: BoxDecoration(
             color: Colors.grey[100],
-            border: Border(
-              top: BorderSide(color: Colors.grey[300]!),
-            ),
+            border: Border(top: BorderSide(color: Colors.grey[300]!)),
           ),
           child: Row(
             children: [
               Expanded(
-                child: KeyboardListener(
+                child: RawKeyboardListener(
                   focusNode: FocusNode(),
-                  onKeyEvent: (event) {
-                    if (event.logicalKey == LogicalKeyboardKey.enter) {
-                      OutgoingDataParser().parseMessages(_messageController.text);
-    
-                      setState(() {
-                        if (_messageController.text.isNotEmpty) {
-                          _messageController.clear();
-                        }
-                      });
-                      _scrollToBottom();
+                  onKey: (event) {
+                    if (event.logicalKey == LogicalKeyboardKey.enter && event is RawKeyDownEvent) {
+                      _handleSend();
                     }
                   },
                   child: TextField(
                     controller: _messageController,
                     decoration: InputDecoration(
                       hintText: "Type a message...",
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8.r),
-                      ),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
                     ),
                     style: TextStyle(fontSize: 16.sp),
                   ),
@@ -141,16 +115,7 @@ class MessagingScreenState extends State<MessagingScreen> {
               Gap(8.w),
               IconButton(
                 icon: Icon(Icons.send, color: Theme.of(context).primaryColor),
-                onPressed: () {
-                  OutgoingDataParser().parseMessages(_messageController.text);
-    
-                  setState(() {
-                    if (_messageController.text.isNotEmpty) {
-                      _messageController.clear();
-                    }
-                  });
-                  _scrollToBottom();
-                },
+                onPressed: _handleSend,
               ),
             ],
           ),
@@ -173,9 +138,7 @@ class _MessageBubble extends StatelessWidget {
       child: Align(
         alignment: isSent ? Alignment.centerRight : Alignment.centerLeft,
         child: Container(
-          constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width * 0.75,
-          ),
+          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
           margin: const EdgeInsets.symmetric(vertical: 4),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
@@ -184,9 +147,7 @@ class _MessageBubble extends StatelessWidget {
           ),
           child: Text(
             message,
-            style: TextStyle(
-              color: isSent ? Colors.white : Colors.black87,
-            ),
+            style: TextStyle(color: isSent ? Colors.white : Colors.black87),
           ),
         ),
       ),

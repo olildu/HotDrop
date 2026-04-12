@@ -3,11 +3,10 @@ import 'dart:developer';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:provider/provider.dart';
-import 'package:test/constants/globals.dart';
-import 'package:test/services/common_functions.dart';
-import 'package:test/providers/popup_provider.dart';
-import 'package:test/services/connection_services.dart';
+import '../injection_container.dart';
+import '../blocs/popup_cubit.dart';
+import '../services/common_functions.dart';
+import '../services/connection_services.dart';
 
 class HttpFunctions {
   Future<String?> downloadFile(String url, String fileName) async {
@@ -29,8 +28,8 @@ class HttpFunctions {
         int downloadedBytes = 0;
         final totalBytes = response.contentLength ?? 0;
 
-        // Show popup at start
-        navigatorKey.currentContext!.read<PopupProvider>().show("Receiving file...", Icons.download, progress: 0);
+        // Use PopupCubit via sl instead of Provider
+        sl<PopupCubit>().show("Receiving file...", Icons.download, progress: 0);
 
         await response.stream.listen(
           (chunk) {
@@ -40,21 +39,20 @@ class HttpFunctions {
             if (totalBytes > 0) {
               final progress = downloadedBytes / totalBytes;
               final progressPercent = (progress * 100).toStringAsFixed(2);
-              log("Downloading... $progressPercent%");
+              
+              // Notify remote peer of progress
               DartFunction().sendMessage(jsonEncode({
                 "type": "progress",
                 "progress_percent": progressPercent,
                 "file_name": fileName,
               }));
 
-              navigatorKey.currentContext!.read<PopupProvider>().updateProgress(progress);
-            } else {
-              log("Downloading... unknown%");
+              sl<PopupCubit>().updateProgress(progress);
             }
           },
           onError: (e) {
             log("Error while streaming: $e");
-            navigatorKey.currentContext!.read<PopupProvider>().hide();
+            sl<PopupCubit>().hide();
           },
           cancelOnError: true,
         ).asFuture();
@@ -66,22 +64,24 @@ class HttpFunctions {
         final elapsedTimeInSeconds = stopwatch.elapsedMilliseconds / 1000;
         final downloadSpeed = downloadedBytes / elapsedTimeInSeconds;
 
-        log("File downloaded successfully to $filePath");
-        log("Average download speed: ${(downloadSpeed / 1024).toStringAsFixed(2)} KB/s");
+        sl<PopupCubit>().show("Download complete!", Icons.check_circle_outline);
 
-        navigatorKey.currentContext!.read<PopupProvider>().show("Download complete!", Icons.check_circle_outline);
-
-        DartFunction().sendMessage(jsonEncode({"type": "downloadComplete", "transfer_speed": downloadSpeed, "name": fileName, "size": totalBytes}));
+        // Notify remote peer of completion
+        DartFunction().sendMessage(jsonEncode({
+          "type": "downloadComplete", 
+          "transfer_speed": downloadSpeed, 
+          "name": fileName, 
+          "size": totalBytes
+        }));
 
         return filePath;
       } else {
-        log("Failed to download file: ${response.statusCode}");
-        navigatorKey.currentContext!.read<PopupProvider>().show("Download failed", Icons.error_outline);
+        sl<PopupCubit>().show("Download failed", Icons.error_outline);
         return null;
       }
     } catch (e) {
       log("Error downloading file: $e");
-      navigatorKey.currentContext!.read<PopupProvider>().show("Download error", Icons.error_outline);
+      sl<PopupCubit>().show("Download error", Icons.error_outline);
       return null;
     }
   }

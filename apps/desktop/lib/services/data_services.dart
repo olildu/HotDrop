@@ -1,60 +1,43 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:test/constants/globals.dart';
-import 'package:test/constants/globals.dart' as globals;
-import 'package:test/providers/contact_provider.dart';
-import 'package:test/providers/hotdrop_provider.dart';
-import 'package:test/providers/message_provider.dart';
-import 'package:test/services/connection_services.dart';
-
-int byteCount = 0;
-String sdata = "";
-String fileName = "";
-Stopwatch stopwatch = Stopwatch();
+import '../injection_container.dart';
+import '../blocs/message_cubit.dart';
+import '../blocs/contact_cubit.dart';
+import '../blocs/hotdrop_cubit.dart';
+import '../blocs/popup_cubit.dart';
+import '../data/models/message_model.dart';
+import '../data/models/file_model.dart';
+import '../data/repositories/contact_repository.dart';
 
 class ReceivedDataParser {
   void parseData(String data) async {
-    if (globals.navigatorKey.currentContext == null) return;
     var parsedData = jsonDecode(data);
 
+    // Handle Incoming Messages
     if (parsedData["type"] == "message") {
-      Provider.of<MessageProvider>(navigatorKey.currentContext!, listen: false).addMessage({
-        "message": parsedData["content"],
-        "sender": "Other",
-      });
+      sl<PopupCubit>().show("You have a new message", Icons.message_rounded);
+      sl<MessageCubit>().addMessage(MessageModel(
+        message: parsedData["content"],
+        sender: "Other",
+      ));
     }
 
+    // Handle Incoming Contacts
     if (parsedData["type"] == "contacts") {
-      List contacts = [];
-
-      for (var x in parsedData["content"]) {
-        String name = x["displayName"] ?? "Unknown";
-        String id = x["id"] ?? "Unknown";
-        String normalizedNumber = x["normalizedNumber"] ?? "";
-        contacts.add({"name": name, "id": id, "normalizedNumber": normalizedNumber.isNotEmpty ? jsonDecode(normalizedNumber) : null});
-      }
-
-      Provider.of<ContactProvider>(navigatorKey.currentContext!, listen: false).replaceContacts(contacts);
+      final contacts = sl<ContactRepository>().parseRawContacts(parsedData["content"]);
+      sl<ContactCubit>().replaceContacts(contacts);
     }
 
+    // Handle Incoming HotDrop Files
     if (parsedData["type"] == "HotDropFile") {
-      Provider.of<HotdropProvider>(navigatorKey.currentContext!, listen: false).addFile(parsedData);
+      sl<HotdropCubit>().addFile(FileModel.fromMap(parsedData));
     }
   }
 }
 
 class OutgoingDataParser {
-  // Message handling
+  // Messages are now handled directly by the MessageCubit and its Repository
   void parseMessages(String message) {
-    if (globals.navigatorKey.currentContext == null) return;
-    Provider.of<MessageProvider>(navigatorKey.currentContext!, listen: false).addMessage(
-      {
-        "message": message,
-        "sender": "Me",
-      },
-    );
-
-    DartFunction().sendMessage(jsonEncode({"type": "message", "format": "string", "content": message}));
+    sl<MessageCubit>().sendMessage(message);
   }
 }

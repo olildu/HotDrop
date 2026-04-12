@@ -1,27 +1,39 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
-import 'package:test/constants/globals.dart';
-import 'package:test/providers/contact_provider.dart';
-import 'package:test/providers/hotdrop_provider.dart';
-import 'package:test/providers/message_provider.dart';
-import 'package:test/providers/popup_provider.dart';
-import 'package:test/screens/connection_screen.dart';
-import 'package:test/services/connection_services.dart';
+import 'package:test/core/theme/app_theme.dart';
+import 'package:test/services/ble_interop_service.dart';
+
+import 'constants/globals.dart';
+import 'injection_container.dart' as di;
+import 'screens/connection_screen.dart';
+import 'services/connection_services.dart';
+
+// Import all Cubits
+import 'blocs/message_cubit.dart';
+import 'blocs/contact_cubit.dart';
+import 'blocs/hotdrop_cubit.dart';
+import 'blocs/popup_cubit.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 1. Initialize Dependency Injection Container
+  await di.init();
+
+  // 2. Perform startup cleanup
   await hardCleanupOnStartup();
 
   runApp(
-    MultiProvider(
+    // 3. Replace MultiProvider with MultiBlocProvider
+    MultiBlocProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => MessageProvider()),
-        ChangeNotifierProvider(create: (_) => ContactProvider()),
-        ChangeNotifierProvider(create: (_) => HotdropProvider()),
-        ChangeNotifierProvider(create: (_) => PopupProvider()),
+        BlocProvider(create: (_) => di.sl<MessageCubit>()),
+        BlocProvider(create: (_) => di.sl<ContactCubit>()),
+        BlocProvider(create: (_) => di.sl<HotdropCubit>()),
+        BlocProvider(create: (_) => di.sl<PopupCubit>()),
       ],
       child: const DesktopSide(),
     ),
@@ -50,10 +62,11 @@ class _DesktopSideState extends State<DesktopSide> with WidgetsBindingObserver {
 
   @override
   Future<AppExitResponse> didRequestAppExit() async {
-    print("Window close detected. Cleaning up background tasks...");
+    debugPrint("Window close detected. Cleaning up background tasks...");
 
+    // 4. Cleanup background tasks on exit
     shutdownHotspotSync();
-    await bleInteropService.dispose();
+    await di.sl.get<BleInteropService>().dispose();
 
     return AppExitResponse.exit;
   }
@@ -66,10 +79,7 @@ class _DesktopSideState extends State<DesktopSide> with WidgetsBindingObserver {
       child: MaterialApp(
         navigatorKey: navigatorKey,
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          fontFamily: 'Poppins',
-          textTheme: GoogleFonts.poppinsTextTheme(),
-        ),
+        theme: AppTheme.darkTheme,
         home: const ConnectionScreen(),
       ),
     );
