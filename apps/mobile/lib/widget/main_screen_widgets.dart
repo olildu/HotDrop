@@ -6,9 +6,9 @@ import 'package:gap/gap.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:test_mobile/blocs/file_detail_cubit.dart';
+import 'package:test_mobile/screens/connection/receive_screen.dart';
 
 // Import screens for navigation within detailWidgets
-import 'package:test_mobile/screens/connection_screen.dart';
 import 'package:test_mobile/screens/hotdrop_screen.dart';
 import 'package:test_mobile/screens/messaging_screen.dart';
 import 'package:test_mobile/screens/shared_files_screen.dart';

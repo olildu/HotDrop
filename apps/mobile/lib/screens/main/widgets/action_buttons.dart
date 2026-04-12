@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:gap/gap.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:test_mobile/screens/connection_screen.dart';
+import 'package:test_mobile/screens/connection/receive_screen.dart';
+import 'package:test_mobile/screens/connection/send_screen.dart';
 
 class ActionButtons extends StatelessWidget {
   final bool isConnected;

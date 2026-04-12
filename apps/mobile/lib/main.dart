@@ -8,13 +8,11 @@ import 'package:test_mobile/constants/globals.dart';
 import 'package:test_mobile/blocs/file_detail_cubit.dart';
 import 'package:test_mobile/blocs/message_cubit.dart';
 import 'package:test_mobile/core/theme/app_theme.dart';
-import 'package:test_mobile/data/repositories/chat_repository.dart';
 import 'package:test_mobile/data/repositories/connection_repository.dart';
 import 'package:test_mobile/data/repositories/file_repository.dart';
 import 'package:test_mobile/injection_container.dart' as di;
 import 'package:test_mobile/screens/main_screen.dart';
 import 'package:test_mobile/services/connection_services.dart';
-import 'package:test_mobile/services/file_hosting_services.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
