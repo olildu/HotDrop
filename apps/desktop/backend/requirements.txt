@@ -1,0 +1,7 @@
+bleak
+llama-cpp-python
+winrt-runtime
+winrt-Windows.Devices.Bluetooth
+winrt-Windows.Storage.Streams
+pyinstaller
+bleak

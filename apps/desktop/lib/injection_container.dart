@@ -1,4 +1,6 @@
 import 'package:get_it/get_it.dart';
+import 'package:test/blocs/ai_cubit.dart';
+import 'package:test/services/local_ai_service.dart';
 import 'blocs/message_cubit.dart';
 import 'blocs/contact_cubit.dart';
 import 'blocs/hotdrop_cubit.dart';
@@ -11,17 +13,15 @@ import 'services/ble_interop_service.dart';
 final sl = GetIt.instance;
 
 Future<void> init() async {
-  //! Blocs / Cubits
   sl.registerFactory(() => MessageCubit(sl()));
   sl.registerFactory(() => ContactCubit());
   sl.registerFactory(() => HotdropCubit(sl()));
-  sl.registerLazySingleton(() => PopupCubit()); // LazySingleton for global access
+  sl.registerFactory(() => AiCubit(sl(), sl()));
+  sl.registerLazySingleton(() => PopupCubit());
 
-  //! Repositories
   sl.registerLazySingleton(() => ChatRepository());
   sl.registerLazySingleton(() => ContactRepository());
   sl.registerLazySingleton(() => FileRepository());
-
-  //! Services
+  sl.registerLazySingleton(() => LocalAiService());
   sl.registerLazySingleton(() => BleInteropService());
 }

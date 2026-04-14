@@ -2,8 +2,6 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:test/core/theme/app_theme.dart';
 import 'package:test/services/ble_interop_service.dart';
 
 import 'constants/globals.dart';
@@ -24,7 +22,7 @@ Future<void> main() async {
   await di.init();
 
   // 2. Perform startup cleanup
-  await hardCleanupOnStartup();
+  hardCleanupOnStartup();
 
   runApp(
     // 3. Replace MultiProvider with MultiBlocProvider
@@ -79,7 +77,7 @@ class _DesktopSideState extends State<DesktopSide> with WidgetsBindingObserver {
       child: MaterialApp(
         navigatorKey: navigatorKey,
         debugShowCheckedModeBanner: false,
-        theme: AppTheme.darkTheme,
+        // theme: AppTheme.darkTheme,
         home: const ConnectionScreen(),
       ),
     );

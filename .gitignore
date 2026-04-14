@@ -43,3 +43,25 @@ app.*.map.json
 /android/app/release
 /apps/mobile/build
 /apps/desktop/build
+
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Python metadata
+*.metadata
+
+# Virtual environments
+venv/
+.env/
+
+# Build artifacts
+dist/
+build/
+*.spec
+
+# OS files
+.DS_Store
+Thumbs.db
+*.gguf

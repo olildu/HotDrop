@@ -143,13 +143,13 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
     if (Platform.isWindows) {
       setState(() => loadingStatus = "Checking permissions...");
 
-      final hasAdmin = await _ensureAdminPrivileges();
-      if (!hasAdmin) {
-        setState(() {
-          isAdminError = true;
-        });
-        return;
-      }
+      // final hasAdmin = await _ensureAdminPrivileges();
+      // if (!hasAdmin) {
+      //   setState(() {
+      //     isAdminError = true;
+      //   });
+      //   return;
+      // }
 
       setState(() => loadingStatus = "Enabling Mobile Hotspot...");
       final hotspotStatus = await _enableWindowsHotspot();
