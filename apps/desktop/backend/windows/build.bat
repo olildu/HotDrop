@@ -23,8 +23,7 @@ pyinstaller --onefile --noconsole ^
 --hidden-import winrt.windows.devices.bluetooth ^
 --hidden-import winrt.windows.devices.bluetooth.genericattributeprofile ^
 --hidden-import winrt.windows.storage.streams ^
---collect-all llama_cpp ^
---add-data "C:\Users\olildu\Documents\Code\Personal\HotDrop\apps\desktop\backend\venv\Lib\site-packages\llama_cpp\lib;llama_cpp/lib" ^
+
 main.py
 
 echo ===============================

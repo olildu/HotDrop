@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:gap/gap.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:test/screens/assistant_screen.dart';
 import '../components/main_screen/top_popup.dart';
 import '../constants/globals.dart';
 import '../screens/contacts_screen.dart';
@@ -16,10 +15,9 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  // Navigation state managed locally via setState as it only affects this widget's layout
   @override
   Widget build(BuildContext context) {
-    final List<Widget> pages = [const HotdropScreen(), const ContactScreen(), const MessagingScreen(), const AssistantScreen()];
+    final List<Widget> pages = [const HotdropScreen(), const ContactScreen(), const MessagingScreen()];
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -46,7 +44,6 @@ class _MainScreenState extends State<MainScreen> {
                   _buildNavTile("HotDrop", Icons.wifi_tethering, 0),
                   _buildNavTile("Contacts", Icons.contacts_outlined, 1),
                   _buildNavTile("Messaging", Icons.chat_outlined, 2),
-                  _buildNavTile("AI Assistant", Icons.smart_toy_outlined, 3),
                   Gap(20.h),
                   _buildSectionHeader("Devices"),
                   const ListTile(

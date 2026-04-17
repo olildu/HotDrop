@@ -1,5 +1,4 @@
 import 'package:get_it/get_it.dart';
-import 'package:test/blocs/ai_cubit.dart';
 import 'package:test/services/local_ai_service.dart';
 import 'blocs/message_cubit.dart';
 import 'blocs/contact_cubit.dart';
@@ -16,7 +15,6 @@ Future<void> init() async {
   sl.registerFactory(() => MessageCubit(sl()));
   sl.registerFactory(() => ContactCubit());
   sl.registerFactory(() => HotdropCubit(sl()));
-  sl.registerFactory(() => AiCubit(sl(), sl()));
   sl.registerLazySingleton(() => PopupCubit());
 
   sl.registerLazySingleton(() => ChatRepository());
