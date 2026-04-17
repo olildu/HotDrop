@@ -15,10 +15,19 @@ class ReceiveScreen extends StatefulWidget {
 }
 
 class _ReceiveScreenState extends State<ReceiveScreen> {
+  late ConnectionCubit _cubit;
+
   @override
   void initState() {
     super.initState();
-    context.read<ConnectionCubit>().startHosting();
+    _cubit = context.read<ConnectionCubit>();
+    _cubit.startHosting();
+  }
+
+  @override
+  void dispose() {
+    // _cubit.stopBleOperations();
+    super.dispose();
   }
 
   @override

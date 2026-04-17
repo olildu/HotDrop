@@ -57,7 +57,7 @@ class ConnectionCubit extends Cubit<ConnectionCubitState> {
 
   /// Starts the Hotspot and begins BLE Advertising
   Future<void> startHosting() async {
-    _stopBleOperations();
+    stopBleOperations();
     emit(state.copyWith(status: ConnectionStatus.hosting, discoveredDevices: []));
 
     final creds = await _repository.hostSession();
@@ -70,7 +70,7 @@ class ConnectionCubit extends Cubit<ConnectionCubitState> {
 
   /// Initiates a BLE Scan for nearby HotDrop hosts
   Future<void> startScanning() async {
-    _stopBleOperations();
+    stopBleOperations();
     emit(state.copyWith(status: ConnectionStatus.scanning, discoveredDevices: []));
 
     try {
@@ -91,8 +91,9 @@ class ConnectionCubit extends Cubit<ConnectionCubitState> {
       // Map scan results into your DiscoveredDevice list
       _scanSubscription = FlutterBluePlus.scanResults.listen((results) {
         final devices = results
+            .where((r) => r.device.platformName.isNotEmpty)
             .map((r) => DiscoveredDevice(
-                  name: r.device.platformName.isNotEmpty ? r.device.platformName : "HotDrop Peer",
+                  name: r.device.platformName,
                   id: r.device.remoteId.str,
                   rawData: "",
                   device: r.device,
@@ -108,7 +109,7 @@ class ConnectionCubit extends Cubit<ConnectionCubitState> {
 
   /// Connects to a found BLE peer and reads their Hotspot credentials
   Future<void> connectToDiscoveredDevice(DiscoveredDevice discovered) async {
-    _stopBleOperations();
+    stopBleOperations();
     emit(state.copyWith(status: ConnectionStatus.connecting));
 
     try {
@@ -147,15 +148,16 @@ class ConnectionCubit extends Cubit<ConnectionCubitState> {
     }
   }
 
-  void _stopBleOperations() {
+  void stopBleOperations() {
     _scanSubscription?.cancel();
     _scanSubscription = null;
+    _repository.performCleanup();
     FlutterBluePlus.stopScan();
   }
 
   @override
   Future<void> close() {
-    _stopBleOperations();
+    stopBleOperations();
     return super.close();
   }
 }
