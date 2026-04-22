@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer'; // FIX: Add for log
-import 'package:test_mobile/constants/globals.dart'; // FIX: Add for socket/connectedToPort
-import 'package:test_mobile/constants/globals.dart' as globals;
-import 'package:test_mobile/services/connection_services.dart';
-import 'package:test_mobile/services/ble_peripheral_service.dart';
+import 'package:test_mobile/data/constants/globals.dart'; // FIX: Add for socket/connectedToPort
+import 'package:test_mobile/data/constants/globals.dart' as globals;
+import 'package:test_mobile/data/services/connection_services.dart';
+import 'package:test_mobile/data/services/ble_peripheral_service.dart';
 
 class ConnectionRepository {
   final AndroidFunction _hostService = AndroidFunction();

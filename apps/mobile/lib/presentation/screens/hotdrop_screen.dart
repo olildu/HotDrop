@@ -1,0 +1,100 @@
+// lib/screens/hotdrop_screen.dart
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart'; // Add this
+import 'package:test_mobile/logic/cubits/hotdrop_cubit.dart'; // Add this
+import 'package:test_mobile/presentation/theme/app_colors.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:gap/gap.dart';
+
+class HotdopScreenScreen extends StatefulWidget {
+  const HotdopScreenScreen({super.key});
+  @override
+  HotdopScreenScreenState createState() => HotdopScreenScreenState();
+}
+
+class HotdopScreenScreenState extends State<HotdopScreenScreen> {
+  // REMOVE: final FileHostingService fileHostingService = FileHostingService();
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<HotDropCubit, HotDropState>(
+      builder: (context, state) {
+        final hotDropCubit = context.read<HotDropCubit>();
+        // Map Cubit state to local UI logic
+        final isUploading = hotDropCubit.isUploading;
+        final uploadComplete = hotDropCubit.isComplete;
+
+        return Scaffold(
+          backgroundColor: AppColors.white,
+          appBar: AppBar(
+            backgroundColor: AppColors.white,
+            title: Text('HotDrop', style: TextStyle(color: AppColors.legacyNeutralStrong, fontSize: 20.sp, fontWeight: FontWeight.bold)),
+          ),
+          body: Padding(
+            padding: EdgeInsets.all(24.w),
+            child: Column(
+              children: [
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        uploadComplete ? Icons.check_circle : Icons.cloud_upload,
+                        size: 80.sp,
+                        color: uploadComplete ? AppColors.success : AppColors.legacyNeutralStrong,
+                      ),
+                      Gap(24.h),
+                      Text(uploadComplete ? 'Files Sent!' : 'HotDrop', style: TextStyle(fontSize: 24.sp, fontWeight: FontWeight.bold, color: AppColors.legacyNeutralStrong)),
+                      Gap(16.h),
+                      Text(
+                        uploadComplete ? 'Your files have been successfully shared' : 'Select files to share instantly',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 16.sp, color: AppColors.legacyNeutralStrong),
+                      ),
+                      Gap(40.h),
+
+                      // Progress Bar based on global state
+                      if (isUploading) ...[
+                        LinearProgressIndicator(
+                          value: state.progress,
+                          backgroundColor: AppColors.legacyProgressTrack,
+                          color: AppColors.legacyNeutralStrong,
+                        ),
+                        Gap(16.h),
+                        Text("${(state.progress * 100).toInt()}% Transferred", style: TextStyle(color: AppColors.legacyNeutralStrong, fontSize: 14.sp)),
+                      ],
+
+                      if (!uploadComplete && !isUploading)
+                        ElevatedButton(
+                          onPressed: hotDropCubit.pickAndHostFiles,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.legacyNeutralStrong,
+                            foregroundColor: AppColors.white,
+                            minimumSize: Size(double.infinity, 50.h),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                          ),
+                          child: Text('SELECT FILES', style: TextStyle(fontSize: 16.sp)),
+                        ),
+
+                      if (uploadComplete)
+                        ElevatedButton(
+                          onPressed: () => context.read<HotDropCubit>().reset(),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.legacyNeutralStrong,
+                            foregroundColor: AppColors.white,
+                            minimumSize: Size(double.infinity, 50.h),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                          ),
+                          child: Text('SEND MORE FILES', style: TextStyle(fontSize: 16.sp)),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}

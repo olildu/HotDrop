@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
-import '../models/message_model.dart';
-import '../../services/message_storage_service.dart';
-import '../../services/connection_services.dart';
+import 'package:test_mobile/data/models/message_model.dart';
+import 'package:test_mobile/data/services/message_storage_service.dart';
+import 'package:test_mobile/data/services/connection_services.dart';
 
 class ChatRepository {
   final MessageStorageService _storageService = MessageStorageService();

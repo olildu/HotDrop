@@ -1,6 +1,6 @@
 import 'dart:async';
-import '../models/file_model.dart';
-import '../../services/file_storage_service.dart';
+import 'package:test_mobile/data/models/file_model.dart';
+import 'package:test_mobile/data/services/file_storage_service.dart';
 
 class FileRepository {
   final FileStorageService _storageService = FileStorageService();

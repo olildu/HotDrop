@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:flutter_contacts/flutter_contacts.dart';
-import '../../services/connection_services.dart';
+import 'package:test_mobile/data/services/connection_services.dart';
 
 class ContactRepository {
   Future<List<Contact>> fetchContacts() async {
