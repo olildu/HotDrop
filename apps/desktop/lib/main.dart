@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:test/services/ble_interop_service.dart';
 
+import 'blocs/connection_cubit.dart';
 import 'constants/globals.dart';
 import 'injection_container.dart' as di;
 import 'screens/connection_screen.dart';
@@ -28,6 +29,7 @@ Future<void> main() async {
     // 3. Replace MultiProvider with MultiBlocProvider
     MultiBlocProvider(
       providers: [
+        BlocProvider(create: (_) => di.sl<ConnectionCubit>()),
         BlocProvider(create: (_) => di.sl<MessageCubit>()),
         BlocProvider(create: (_) => di.sl<ContactCubit>()),
         BlocProvider(create: (_) => di.sl<HotdropCubit>()),
