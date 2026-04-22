@@ -3,19 +3,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
-import 'blocs/app_lifecycle_cubit.dart';
-import 'blocs/connection_cubit.dart';
-import 'constants/globals.dart';
-import 'injection_container.dart' as di;
-import 'screens/connection_screen.dart';
-import 'services/connection_services.dart';
+import 'logic/cubits/app_lifecycle_cubit.dart';
+import 'logic/cubits/connection_cubit.dart';
+import 'logic/constants/globals.dart';
+import 'logic/injection_container.dart' as di;
+import 'presentation/screens/connection_screen.dart';
+import 'data/services/connection_services.dart';
 
 // Import all Cubits
-import 'blocs/message_cubit.dart';
-import 'blocs/contact_cubit.dart';
-import 'blocs/contact_ui_cubit.dart';
-import 'blocs/hotdrop_cubit.dart';
-import 'blocs/popup_cubit.dart';
+import 'logic/cubits/message_cubit.dart';
+import 'logic/cubits/contact_cubit.dart';
+import 'logic/cubits/contact_ui_cubit.dart';
+import 'logic/cubits/hotdrop_cubit.dart';
+import 'logic/cubits/popup_cubit.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -83,3 +83,6 @@ class _DesktopSideState extends State<DesktopSide> with WidgetsBindingObserver {
     );
   }
 }
+
+
+

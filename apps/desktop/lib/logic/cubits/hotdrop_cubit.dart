@@ -4,12 +4,12 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:open_filex/open_filex.dart';
-import '../constants/globals.dart' as globals;
-import '../data/models/file_model.dart';
-import '../data/repositories/file_repository.dart';
-import '../services/common_functions.dart';
-import '../services/connection_services.dart';
-import '../services/file_server_service.dart';
+import 'package:test/logic/constants/globals.dart' as globals;
+import 'package:test/data/models/file_model.dart';
+import 'package:test/data/repositories/file_repository.dart';
+import 'package:test/data/services/common_functions.dart';
+import 'package:test/data/services/connection_services.dart';
+import 'package:test/data/services/file_server_service.dart';
 
 class HotdropCubit extends Cubit<List<FileModel>> {
   final FileRepository _fileRepository;
@@ -86,3 +86,5 @@ class HotdropCubit extends Cubit<List<FileModel>> {
     return super.close();
   }
 }
+
+

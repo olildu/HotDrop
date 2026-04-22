@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'dart:developer';
 import 'dart:io';
 
-import 'package:test/constants/globals.dart' as globals;
-import 'package:test/services/connection_services.dart';
+import 'package:test/logic/constants/globals.dart' as globals;
+import 'package:test/data/services/connection_services.dart';
 
 enum ConnectionRole { none, host, join }
 
@@ -209,3 +209,4 @@ class ConnectionRepository {
     DartFunction().openPort(context: globals.navigatorKey.currentContext!);
   }
 }
+

@@ -1,6 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../data/models/message_model.dart';
-import '../data/repositories/chat_repository.dart';
+import 'package:test/data/models/message_model.dart';
+import 'package:test/data/repositories/chat_repository.dart';
 
 class MessageCubit extends Cubit<List<MessageModel>> {
   final ChatRepository _chatRepository;
@@ -17,3 +17,4 @@ class MessageCubit extends Cubit<List<MessageModel>> {
     await _chatRepository.sendMessage(text);
   }
 }
+

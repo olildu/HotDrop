@@ -1,5 +1,5 @@
 import 'dart:convert';
-import '../../services/connection_services.dart';
+import 'package:test/data/services/connection_services.dart';
 
 class ChatRepository {
   Future<void> sendMessage(String message) async {
@@ -11,3 +11,5 @@ class ChatRepository {
     await DartFunction().sendMessage(payload);
   }
 }
+
+

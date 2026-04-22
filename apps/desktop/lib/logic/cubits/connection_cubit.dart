@@ -4,8 +4,8 @@ import 'dart:io';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../constants/globals.dart' as globals;
-import '../services/connection_services.dart';
+import 'package:test/logic/constants/globals.dart' as globals;
+import 'package:test/data/services/connection_services.dart';
 
 enum ConnectionRole { none, host, join }
 
@@ -572,3 +572,5 @@ class ConnectionCubit extends Cubit<ConnectionState> {
     }
   }
 }
+
+

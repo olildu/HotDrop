@@ -1,8 +1,8 @@
 import 'dart:ui';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../services/ble_interop_service.dart';
-import '../services/connection_services.dart';
+import 'package:test/data/services/ble_interop_service.dart';
+import 'package:test/data/services/connection_services.dart';
 
 enum AppLifecycleStatus { idle, cleaning, cleaned, failed }
 
@@ -45,3 +45,5 @@ class AppLifecycleCubit extends Cubit<AppLifecycleState> {
     }
   }
 }
+
+

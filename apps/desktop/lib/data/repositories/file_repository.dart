@@ -1,7 +1,7 @@
 import 'dart:io';
-import '../../services/http_functions.dart';
-import '../../services/common_functions.dart';
-import '../models/file_model.dart';
+import 'package:test/data/services/http_functions.dart';
+import 'package:test/data/services/common_functions.dart';
+import 'package:test/data/models/file_model.dart';
 
 class FileRepository {
   final HttpFunctions _httpFunctions = HttpFunctions();
@@ -23,3 +23,4 @@ class FileRepository {
     }).toList();
   }
 }
+
