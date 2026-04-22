@@ -2,8 +2,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:test/services/ble_interop_service.dart';
 
+import 'blocs/app_lifecycle_cubit.dart';
 import 'blocs/connection_cubit.dart';
 import 'constants/globals.dart';
 import 'injection_container.dart' as di;
@@ -30,6 +30,7 @@ Future<void> main() async {
     // 3. Replace MultiProvider with MultiBlocProvider
     MultiBlocProvider(
       providers: [
+        BlocProvider(create: (_) => di.sl<AppLifecycleCubit>()),
         BlocProvider(create: (_) => di.sl<ConnectionCubit>()),
         BlocProvider(create: (_) => di.sl<MessageCubit>()),
         BlocProvider(create: (_) => di.sl<ContactCubit>()),
@@ -64,13 +65,8 @@ class _DesktopSideState extends State<DesktopSide> with WidgetsBindingObserver {
 
   @override
   Future<AppExitResponse> didRequestAppExit() async {
-    debugPrint("Window close detected. Cleaning up background tasks...");
-
-    // 4. Cleanup background tasks on exit
-    shutdownHotspotSync();
-    await di.sl.get<BleInteropService>().dispose();
-
-    return AppExitResponse.exit;
+    debugPrint('Window close detected. Delegating app exit cleanup...');
+    return context.read<AppLifecycleCubit>().requestAppExit();
   }
 
   @override

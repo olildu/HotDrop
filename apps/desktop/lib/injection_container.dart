@@ -1,5 +1,6 @@
 import 'package:get_it/get_it.dart';
 import 'package:test/services/local_ai_service.dart';
+import 'blocs/app_lifecycle_cubit.dart';
 import 'blocs/connection_cubit.dart';
 import 'blocs/message_cubit.dart';
 import 'blocs/contact_cubit.dart';
@@ -14,11 +15,12 @@ import 'services/ble_interop_service.dart';
 final sl = GetIt.instance;
 
 Future<void> init() async {
+  sl.registerFactory(() => AppLifecycleCubit(sl()));
   sl.registerFactory(() => ConnectionCubit());
-  sl.registerFactory(() => MessageCubit(sl()));
-  sl.registerFactory(() => ContactCubit());
+  sl.registerLazySingleton(() => MessageCubit(sl()));
+  sl.registerLazySingleton(() => ContactCubit());
   sl.registerFactory(() => ContactUiCubit());
-  sl.registerFactory(() => HotdropCubit(sl()));
+  sl.registerLazySingleton(() => HotdropCubit(sl()));
   sl.registerLazySingleton(() => PopupCubit());
 
   sl.registerLazySingleton(() => ChatRepository());
