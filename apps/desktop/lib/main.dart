@@ -13,6 +13,7 @@ import 'services/connection_services.dart';
 // Import all Cubits
 import 'blocs/message_cubit.dart';
 import 'blocs/contact_cubit.dart';
+import 'blocs/contact_ui_cubit.dart';
 import 'blocs/hotdrop_cubit.dart';
 import 'blocs/popup_cubit.dart';
 
@@ -32,6 +33,7 @@ Future<void> main() async {
         BlocProvider(create: (_) => di.sl<ConnectionCubit>()),
         BlocProvider(create: (_) => di.sl<MessageCubit>()),
         BlocProvider(create: (_) => di.sl<ContactCubit>()),
+        BlocProvider(create: (_) => di.sl<ContactUiCubit>()),
         BlocProvider(create: (_) => di.sl<HotdropCubit>()),
         BlocProvider(create: (_) => di.sl<PopupCubit>()),
       ],

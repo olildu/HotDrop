@@ -5,50 +5,27 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:gap/gap.dart';
 import 'package:image_picker/image_picker.dart';
 
-class AddContactForm extends StatefulWidget {
+class AddContactForm extends StatelessWidget {
   final XFile? pickedFile;
   final TextEditingController nameController;
   final TextEditingController numberController;
-  final Function(XFile?) onImagePick;
+  final bool canCreateContact;
+  final VoidCallback onPickImage;
+  final ValueChanged<String> onNameChanged;
+  final ValueChanged<String> onNumberChanged;
   final VoidCallback onCreateContact;
 
   const AddContactForm({
     required this.pickedFile,
     required this.nameController,
     required this.numberController,
-    required this.onImagePick,
+    required this.canCreateContact,
+    required this.onPickImage,
+    required this.onNameChanged,
+    required this.onNumberChanged,
     required this.onCreateContact,
     super.key,
   });
-
-  @override
-  State<AddContactForm> createState() => _AddContactFormState();
-}
-
-class _AddContactFormState extends State<AddContactForm> {
-  bool isNameValid = false;
-  bool isNumberValid = false;
-
-  @override
-  void initState() {
-    super.initState();
-    widget.nameController.addListener(_validateInputs);
-    widget.numberController.addListener(_validateInputs);
-  }
-
-  void _validateInputs() {
-    final numberValid = RegExp(r'^\+?\d{7,15}$').hasMatch(widget.numberController.text.trim());
-    setState(() {
-      isNumberValid = numberValid;
-    });
-  }
-
-  @override
-  void dispose() {
-    widget.nameController.removeListener(_validateInputs);
-    widget.numberController.removeListener(_validateInputs);
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -59,38 +36,32 @@ class _AddContactFormState extends State<AddContactForm> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             GestureDetector(
-              onTap: () async {
-                final ImagePicker picker = ImagePicker();
-                final XFile? file = await picker.pickImage(source: ImageSource.gallery);
-                if (file != null) {
-                  widget.onImagePick(file);
-                }
-              },
+              onTap: onPickImage,
               child: CircleAvatar(
                 radius: 60.r,
                 backgroundColor: const Color(0xFFEFEFEF),
-                backgroundImage: widget.pickedFile != null ? FileImage(File(widget.pickedFile!.path)) : null,
-                child: widget.pickedFile == null ? Icon(Icons.add_rounded, size: 40.sp, color: Colors.grey) : null,
+                backgroundImage: pickedFile != null ? FileImage(File(pickedFile!.path)) : null,
+                child: pickedFile == null ? Icon(Icons.add_rounded, size: 40.sp, color: Colors.grey) : null,
               ),
             ),
             Gap(30.h),
-            InputField(controller: widget.nameController, hint: "Contact Name"),
+            InputField(controller: nameController, hint: 'Contact Name', onChanged: onNameChanged),
             Gap(10.h),
-            InputField(controller: widget.numberController, hint: "Contact Number"),
+            InputField(controller: numberController, hint: 'Contact Number', onChanged: onNumberChanged),
             Gap(20.h),
             ElevatedButton(
-              onPressed: isNameValid && isNumberValid ? widget.onCreateContact : null,
+              onPressed: canCreateContact ? onCreateContact : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue,
                 disabledBackgroundColor: Colors.grey[300],
                 minimumSize: Size(200.w, 40.h),
               ),
               child: Text(
-                "Create Contact",
+                'Create Contact',
                 style: TextStyle(
                   fontSize: 14.sp,
                   fontWeight: FontWeight.w500,
-                  color: isNameValid && isNumberValid ? Colors.white : Colors.black54,
+                  color: canCreateContact ? Colors.white : Colors.black54,
                 ),
               ),
             )
@@ -104,8 +75,9 @@ class _AddContactFormState extends State<AddContactForm> {
 class InputField extends StatelessWidget {
   final TextEditingController controller;
   final String hint;
+  final ValueChanged<String>? onChanged;
 
-  const InputField({required this.controller, required this.hint, super.key});
+  const InputField({required this.controller, required this.hint, this.onChanged, super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -114,6 +86,7 @@ class InputField extends StatelessWidget {
       height: 40.h,
       child: TextField(
         controller: controller,
+        onChanged: onChanged,
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: TextStyle(fontSize: 12.sp, color: const Color(0xFFA1A1A1), fontWeight: FontWeight.w300),

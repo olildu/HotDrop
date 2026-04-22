@@ -6,18 +6,18 @@ import 'package:test/utils/common/search_bar.dart';
 class ContactAppBar extends StatelessWidget {
   final bool addContactOpened;
   final bool startedPageNavigation;
-  final TextEditingController searchController;
   final VoidCallback onBack;
   final VoidCallback onForward;
   final VoidCallback onAdd;
+  final ValueChanged<String> onSearchChanged;
 
   const ContactAppBar({
     required this.addContactOpened,
     required this.startedPageNavigation,
-    required this.searchController,
     required this.onBack,
     required this.onForward,
     required this.onAdd,
+    required this.onSearchChanged,
     super.key,
   });
 
@@ -49,9 +49,7 @@ class ContactAppBar extends StatelessWidget {
 
             // Search Bar
             SearchInput(
-              onChanged: (value) {
-                searchController.text = value;
-              },
+              onChanged: onSearchChanged,
             ),
           ],
         ),
