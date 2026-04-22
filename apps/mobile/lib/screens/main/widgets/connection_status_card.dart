@@ -31,9 +31,10 @@ class ConnectionStatusCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                width: 8.w, height: 8.h,
+                width: 8.w,
+                height: 8.h,
                 decoration: BoxDecoration(
-                  color: isConnected ? colorScheme.primary : Colors.redAccent,
+                  color: isConnected ? colorScheme.primary : AppColors.errorAccent,
                   shape: BoxShape.circle,
                 ),
               ),

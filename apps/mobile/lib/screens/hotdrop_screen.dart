@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart'; // Add this
 import 'package:file_picker/file_picker.dart';
 import 'package:test_mobile/blocs/hotdrop_cubit.dart'; // Add this
+import 'package:test_mobile/core/theme/app_colors.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:gap/gap.dart';
 
@@ -35,10 +36,10 @@ class HotdopScreenScreenState extends State<HotdopScreenScreen> {
         final uploadComplete = state.status == HotDropStatus.complete;
 
         return Scaffold(
-          backgroundColor: Colors.white,
+          backgroundColor: AppColors.white,
           appBar: AppBar(
-            backgroundColor: Colors.white,
-            title: Text('HotDrop', style: TextStyle(color: const Color(0xFF49454F), fontSize: 20.sp, fontWeight: FontWeight.bold)),
+            backgroundColor: AppColors.white,
+            title: Text('HotDrop', style: TextStyle(color: AppColors.legacyNeutralStrong, fontSize: 20.sp, fontWeight: FontWeight.bold)),
           ),
           body: Padding(
             padding: EdgeInsets.all(24.w),
@@ -51,15 +52,15 @@ class HotdopScreenScreenState extends State<HotdopScreenScreen> {
                       Icon(
                         uploadComplete ? Icons.check_circle : Icons.cloud_upload,
                         size: 80.sp,
-                        color: uploadComplete ? Colors.green : const Color(0xFF49454F),
+                        color: uploadComplete ? AppColors.success : AppColors.legacyNeutralStrong,
                       ),
                       Gap(24.h),
-                      Text(uploadComplete ? 'Files Sent!' : 'HotDrop', style: TextStyle(fontSize: 24.sp, fontWeight: FontWeight.bold, color: const Color(0xFF49454F))),
+                      Text(uploadComplete ? 'Files Sent!' : 'HotDrop', style: TextStyle(fontSize: 24.sp, fontWeight: FontWeight.bold, color: AppColors.legacyNeutralStrong)),
                       Gap(16.h),
                       Text(
                         uploadComplete ? 'Your files have been successfully shared' : 'Select files to share instantly',
                         textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 16.sp, color: const Color(0xFF49454F)),
+                        style: TextStyle(fontSize: 16.sp, color: AppColors.legacyNeutralStrong),
                       ),
                       Gap(40.h),
 
@@ -67,19 +68,19 @@ class HotdopScreenScreenState extends State<HotdopScreenScreen> {
                       if (isUploading) ...[
                         LinearProgressIndicator(
                           value: state.progress,
-                          backgroundColor: const Color(0xFFE0E0E0),
-                          color: const Color(0xFF49454F),
+                          backgroundColor: AppColors.legacyProgressTrack,
+                          color: AppColors.legacyNeutralStrong,
                         ),
                         Gap(16.h),
-                        Text("${(state.progress * 100).toInt()}% Transferred", style: TextStyle(color: const Color(0xFF49454F), fontSize: 14.sp)),
+                        Text("${(state.progress * 100).toInt()}% Transferred", style: TextStyle(color: AppColors.legacyNeutralStrong, fontSize: 14.sp)),
                       ],
 
                       if (!uploadComplete && !isUploading)
                         ElevatedButton(
                           onPressed: _pickFile,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF49454F),
-                            foregroundColor: Colors.white,
+                            backgroundColor: AppColors.legacyNeutralStrong,
+                            foregroundColor: AppColors.white,
                             minimumSize: Size(double.infinity, 50.h),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
                           ),
@@ -90,8 +91,8 @@ class HotdopScreenScreenState extends State<HotdopScreenScreen> {
                         ElevatedButton(
                           onPressed: () => context.read<HotDropCubit>().reset(),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF49454F),
-                            foregroundColor: Colors.white,
+                            backgroundColor: AppColors.legacyNeutralStrong,
+                            foregroundColor: AppColors.white,
                             minimumSize: Size(double.infinity, 50.h),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
                           ),

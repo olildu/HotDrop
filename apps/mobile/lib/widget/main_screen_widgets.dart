@@ -6,6 +6,7 @@ import 'package:gap/gap.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:test_mobile/blocs/file_detail_cubit.dart';
+import 'package:test_mobile/core/theme/app_colors.dart';
 import 'package:test_mobile/screens/connection/receive_screen.dart';
 
 // Import screens for navigation within detailWidgets
@@ -24,15 +25,15 @@ class MainHeader extends StatelessWidget {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("Welcome back", style: GoogleFonts.poppins(fontSize: 16.sp, color: const Color(0xFF7A7A7A))),
-            Text("$userName 👋", style: GoogleFonts.poppins(fontSize: 30.sp, fontWeight: FontWeight.w600, color: const Color(0xFF49454F))),
+            Text("Welcome back", style: GoogleFonts.poppins(fontSize: 16.sp, color: AppColors.legacyNeutralMuted)),
+            Text("$userName 👋", style: GoogleFonts.poppins(fontSize: 30.sp, fontWeight: FontWeight.w600, color: AppColors.legacyNeutralStrong)),
           ],
         ),
         const Spacer(),
         CircleAvatar(
           radius: 25.r,
-          backgroundColor: const Color(0xFF49454F),
-          child: Text(userName[0], style: GoogleFonts.poppins(color: Colors.white, fontSize: 18.sp, fontWeight: FontWeight.w500)),
+          backgroundColor: AppColors.legacyNeutralStrong,
+          child: Text(userName[0], style: GoogleFonts.poppins(color: AppColors.white, fontSize: 18.sp, fontWeight: FontWeight.w500)),
         ),
       ],
     );
@@ -54,7 +55,7 @@ class TransferStats extends StatelessWidget {
             children: [
               TextSpan(
                 text: ' Transferred',
-                style: GoogleFonts.poppins(fontSize: 30.sp, color: const Color.fromARGB(255, 133, 133, 133)),
+                style: GoogleFonts.poppins(fontSize: 30.sp, color: AppColors.legacyNeutralMid),
               ),
             ],
           ),
@@ -76,7 +77,7 @@ class RecentFilesList extends StatelessWidget {
         if (receivedFiles.isEmpty) {
           return Padding(
             padding: EdgeInsets.symmetric(vertical: 20.h),
-            child: Center(child: Text("No files received yet.", style: GoogleFonts.poppins(fontSize: 14.sp, color: Colors.grey))),
+            child: Center(child: Text("No files received yet.", style: GoogleFonts.poppins(fontSize: 14.sp, color: AppColors.grey))),
           );
         }
 
@@ -94,16 +95,16 @@ class RecentFilesList extends StatelessWidget {
                 padding: EdgeInsets.symmetric(horizontal: 20.sp),
                 height: 100.h,
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: AppColors.white,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color.fromARGB(255, 235, 235, 235)),
+                  border: Border.all(color: AppColors.legacyBorderSubtle),
                 ),
                 child: Row(
                   children: [
                     Container(
                       padding: EdgeInsets.all(15.sp),
-                      decoration: const BoxDecoration(color: Color.fromARGB(255, 73, 69, 79), shape: BoxShape.circle),
-                      child: const Icon(Icons.photo_camera_outlined, color: Colors.white),
+                      decoration: const BoxDecoration(color: AppColors.legacyNeutralStrong, shape: BoxShape.circle),
+                      child: const Icon(Icons.photo_camera_outlined, color: AppColors.white),
                     ),
                     Gap(20.w),
                     Column(
@@ -150,9 +151,9 @@ Widget detailWidgets(BuildContext context, double squareSize, int index, Map<Str
               height: squareSize,
               padding: EdgeInsets.all(12.sp),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppColors.white,
                 borderRadius: BorderRadius.circular(12.sp),
-                border: Border.all(color: const Color(0xFFE8E8E8), width: 1.w),
+                border: Border.all(color: AppColors.legacyBorderLight, width: 1.w),
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -160,12 +161,12 @@ Widget detailWidgets(BuildContext context, double squareSize, int index, Map<Str
                   Icon(
                     data["connectionStatus"] == 1 ? Icons.laptop_rounded : Icons.wifi_tethering_off_outlined,
                     size: 90.sp,
-                    color: const Color(0xFF49454F),
+                    color: AppColors.legacyNeutralStrong,
                   ),
                   Gap(10.h),
                   Text(
                     data["connectionStatus"] == 1 ? "Connected to Olildu" : "Not Connected",
-                    style: GoogleFonts.poppins(fontSize: 14.sp, color: const Color(0xFF49454F)),
+                    style: GoogleFonts.poppins(fontSize: 14.sp, color: AppColors.legacyNeutralStrong),
                     textAlign: TextAlign.center,
                   )
                 ],
@@ -188,7 +189,7 @@ Widget detailWidgets(BuildContext context, double squareSize, int index, Map<Str
                     },
                     child: Container(
                       decoration: BoxDecoration(
-                        color: const Color(0xFF49454F),
+                        color: AppColors.legacyNeutralStrong,
                         borderRadius: BorderRadius.circular(12.sp),
                       ),
                       child: Row(
@@ -196,10 +197,10 @@ Widget detailWidgets(BuildContext context, double squareSize, int index, Map<Str
                         children: [
                           Transform.rotate(
                             angle: -95,
-                            child: Icon(Icons.send, size: 36.sp, color: Colors.white),
+                            child: Icon(Icons.send, size: 36.sp, color: AppColors.white),
                           ),
                           Gap(8.w),
-                          Text("Messages", style: GoogleFonts.poppins(fontSize: 16.sp, color: Colors.white)),
+                          Text("Messages", style: GoogleFonts.poppins(fontSize: 16.sp, color: AppColors.white)),
                         ],
                       ),
                     ),
@@ -211,22 +212,22 @@ Widget detailWidgets(BuildContext context, double squareSize, int index, Map<Str
                   child: Container(
                     padding: EdgeInsets.symmetric(horizontal: 12.w),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF49454F),
+                      color: AppColors.legacyNeutralStrong,
                       borderRadius: BorderRadius.circular(12.sp),
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.network_check, size: 28.sp, color: Colors.white),
+                        Icon(Icons.network_check, size: 28.sp, color: AppColors.white),
                         Gap(10.w),
                         Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text("Avg Speed", style: GoogleFonts.poppins(fontSize: 13.sp, color: Colors.white)),
+                            Text("Avg Speed", style: GoogleFonts.poppins(fontSize: 13.sp, color: AppColors.white)),
                             BlocBuilder<FileDetailCubit, FileDetailState>(
                               builder: (context, state) => Text(
                                 "${context.read<FileDetailCubit>().getStats()["average_transfer_speed"] ?? '0 MB'}/s",
-                                style: GoogleFonts.poppins(fontSize: 13.sp, color: Colors.white),
+                                style: GoogleFonts.poppins(fontSize: 13.sp, color: AppColors.white),
                               ),
                             ),
                           ],
@@ -252,15 +253,15 @@ Widget detailWidgets(BuildContext context, double squareSize, int index, Map<Str
                     },
                     child: Container(
                       decoration: BoxDecoration(
-                        color: const Color(0xFF49454F),
+                        color: AppColors.legacyNeutralStrong,
                         borderRadius: BorderRadius.circular(12.sp),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.wifi_tethering_rounded, size: 42.sp, color: Colors.white),
+                          Icon(Icons.wifi_tethering_rounded, size: 42.sp, color: AppColors.white),
                           Gap(8.w),
-                          Text("HotDrop", style: GoogleFonts.poppins(fontSize: 16.sp, color: Colors.white)),
+                          Text("HotDrop", style: GoogleFonts.poppins(fontSize: 16.sp, color: AppColors.white)),
                         ],
                       ),
                     ),
@@ -276,17 +277,17 @@ Widget detailWidgets(BuildContext context, double squareSize, int index, Map<Str
                     child: Container(
                       padding: EdgeInsets.symmetric(horizontal: 12.w),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF49454F),
+                        color: AppColors.legacyNeutralStrong,
                         borderRadius: BorderRadius.circular(12.sp),
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.article_rounded, size: 28.sp, color: Colors.white),
+                          Icon(Icons.article_rounded, size: 28.sp, color: AppColors.white),
                           Gap(10.w),
                           BlocBuilder<FileDetailCubit, FileDetailState>(
                             builder: (context, state) => Text(
                               "${state.files.length} Files Shared",
-                              style: GoogleFonts.poppins(fontSize: 13.sp, color: Colors.white),
+                              style: GoogleFonts.poppins(fontSize: 13.sp, color: AppColors.white),
                             ),
                           )
                         ],
@@ -303,19 +304,19 @@ Widget detailWidgets(BuildContext context, double squareSize, int index, Map<Str
             height: squareSize,
             padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColors.white,
               borderRadius: BorderRadius.circular(12.sp),
-              border: Border.all(color: const Color(0xFFE8E8E8), width: 1.w),
+              border: Border.all(color: AppColors.legacyBorderLight, width: 1.w),
             ),
             child: Column(
               children: [
                 Align(
                   alignment: Alignment.topLeft,
-                  child: Text("Statistics", style: GoogleFonts.poppins(fontSize: 15.sp, color: const Color(0xFF49454F))),
+                  child: Text("Statistics", style: GoogleFonts.poppins(fontSize: 15.sp, color: AppColors.legacyNeutralStrong)),
                 ),
                 Expanded(
                   child: Center(
-                    child: Icon(Icons.donut_large_rounded, size: 90.sp, color: const Color(0xFF49454F)),
+                    child: Icon(Icons.donut_large_rounded, size: 90.sp, color: AppColors.legacyNeutralStrong),
                   ),
                 ),
               ],
@@ -344,10 +345,10 @@ Widget recentFilesTitleSearchBar() {
           child: Container(
             padding: EdgeInsets.all(10.sp),
             decoration: const BoxDecoration(
-              color: Color(0xFFE2E2E2),
+              color: AppColors.legacySearchBackground,
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.search_rounded, size: 22.sp, color: Colors.black),
+            child: Icon(Icons.search_rounded, size: 22.sp, color: AppColors.black),
           ),
         ),
       ],

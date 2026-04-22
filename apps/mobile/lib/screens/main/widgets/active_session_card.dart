@@ -63,8 +63,8 @@ class ActiveSessionCard extends StatelessWidget {
         Row(
           children: [
             CircleAvatar(
-                backgroundColor: isComplete ? Colors.greenAccent.withOpacity(0.1) : colorScheme.primary.withOpacity(0.1),
-                child: Icon(isComplete ? Icons.check_circle_rounded : Icons.folder_zip_rounded, color: isComplete ? Colors.greenAccent : colorScheme.primary)),
+                backgroundColor: isComplete ? AppColors.successAccent.withOpacity(0.1) : colorScheme.primary.withOpacity(0.1),
+                child: Icon(isComplete ? Icons.check_circle_rounded : Icons.folder_zip_rounded, color: isComplete ? AppColors.successAccent : colorScheme.primary)),
             Gap(16.w),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -85,7 +85,7 @@ class ActiveSessionCard extends StatelessWidget {
           value: state.progress,
           minHeight: 4,
           backgroundColor: colorScheme.surfaceContainerHighest,
-          color: isComplete ? Colors.greenAccent : colorScheme.primary,
+          color: isComplete ? AppColors.successAccent : colorScheme.primary,
         ),
       ],
     );

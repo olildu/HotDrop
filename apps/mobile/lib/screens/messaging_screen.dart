@@ -66,12 +66,12 @@ class _MessagingScreenState extends State<MessagingScreen> {
               if (!isConnected)
                 Container(
                   width: double.infinity,
-                  color: Colors.redAccent.withOpacity(0.1),
+                  color: AppColors.errorAccent.withOpacity(0.1),
                   padding: EdgeInsets.symmetric(vertical: 8.h),
                   child: Text(
                     "DISCONNECTED - MESSAGING UNAVAILABLE",
                     textAlign: TextAlign.center,
-                    style: textTheme.labelSmall?.copyWith(color: Colors.redAccent, fontWeight: FontWeight.bold),
+                    style: textTheme.labelSmall?.copyWith(color: AppColors.errorAccent, fontWeight: FontWeight.bold),
                   ),
                 ),
 
