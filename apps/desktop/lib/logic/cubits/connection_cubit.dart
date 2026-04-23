@@ -17,6 +17,7 @@ class ConnectionState {
   final String loadingStatus;
   final bool isProcessing;
   final bool isAdminError;
+  final bool hostClientConnected;
   final String? qrData;
   final String? currentServerIp;
 
@@ -26,6 +27,7 @@ class ConnectionState {
     this.loadingStatus = 'Choose Connection Mode',
     this.isProcessing = false,
     this.isAdminError = false,
+    this.hostClientConnected = false,
     this.qrData,
     this.currentServerIp,
   });
@@ -36,6 +38,7 @@ class ConnectionState {
     String? loadingStatus,
     bool? isProcessing,
     bool? isAdminError,
+    bool? hostClientConnected,
     String? qrData,
     bool clearQrData = false,
     String? currentServerIp,
@@ -46,6 +49,7 @@ class ConnectionState {
       loadingStatus: loadingStatus ?? this.loadingStatus,
       isProcessing: isProcessing ?? this.isProcessing,
       isAdminError: isAdminError ?? this.isAdminError,
+      hostClientConnected: hostClientConnected ?? this.hostClientConnected,
       qrData: clearQrData ? null : qrData ?? this.qrData,
       currentServerIp: currentServerIp ?? this.currentServerIp,
     );
@@ -64,8 +68,10 @@ class ConnectionCubit extends Cubit<ConnectionState> {
         selectedRole: ConnectionRole.host,
         isProcessing: true,
         isAdminError: false,
+        hostClientConnected: false,
         availableHosts: const <Map<String, dynamic>>[],
         clearQrData: true,
+        currentServerIp: null,
         loadingStatus: 'Preparing connection services...',
       ),
     );
@@ -87,6 +93,7 @@ class ConnectionCubit extends Cubit<ConnectionState> {
         isAdminError: false,
         availableHosts: const <Map<String, dynamic>>[],
         clearQrData: true,
+        currentServerIp: null,
         loadingStatus: 'Scanning for nearby peers...',
       ),
     );
@@ -211,24 +218,37 @@ class ConnectionCubit extends Cubit<ConnectionState> {
     }
   }
 
-  void reset() {
+  void disconnect() {
+    _hotspotSsid = null;
+    _hotspotPassword = null;
+    globals.currentServerIp = null;
+    globals.isHotspotActive = false;
+    globals.activeHotspotSsid = null;
+
+    DartFunction().closePort();
+    shutdownHotspotSync();
+
     emit(const ConnectionState());
+  }
+
+  void reset() {
+    disconnect();
   }
 
   Future<void> _initializeServer() async {
     if (Platform.isWindows) {
       emit(state.copyWith(loadingStatus: 'Checking permissions...'));
 
-      final hasAdmin = await _ensureAdminPrivileges();
-      if (!hasAdmin) {
-        emit(
-          state.copyWith(
-            isAdminError: true,
-            isProcessing: false,
-          ),
-        );
-        return;
-      }
+      // final hasAdmin = await _ensureAdminPrivileges();
+      // if (!hasAdmin) {
+      //   emit(
+      //     state.copyWith(
+      //       isAdminError: true,
+      //       isProcessing: false,
+      //     ),
+      //   );
+      //   return;
+      // }
 
       emit(state.copyWith(loadingStatus: 'Enabling Mobile Hotspot...'));
       final hotspotStatus = await _enableWindowsHotspot();
@@ -558,7 +578,7 @@ class ConnectionCubit extends Cubit<ConnectionState> {
 
     emit(
       state.copyWith(
-        loadingStatus: 'Starting BLE Broadcast...',
+        loadingStatus: 'Broadcasting. Waiting for a device to connect...',
         qrData: qrData,
         currentServerIp: ipAddress,
       ),
@@ -568,9 +588,33 @@ class ConnectionCubit extends Cubit<ConnectionState> {
 
     final context = globals.navigatorKey.currentContext;
     if (context != null) {
-      DartFunction().openPort(context: context);
+      DartFunction().openPort(
+        context: context,
+        onClientConnected: () {
+          if (isClosed) {
+            return;
+          }
+
+          emit(
+            state.copyWith(
+              hostClientConnected: true,
+              loadingStatus: 'Peer connected.',
+            ),
+          );
+        },
+        onClientDisconnected: () {
+          if (isClosed) {
+            return;
+          }
+
+          emit(
+            state.copyWith(
+              hostClientConnected: false,
+              loadingStatus: 'Broadcasting. Waiting for a device to connect...',
+            ),
+          );
+        },
+      );
     }
   }
 }
-
-

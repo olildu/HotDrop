@@ -9,10 +9,19 @@ Socket? socket;
 ServerSocket? server;
 
 class DartFunction {
-  Future<void> openPort({BuildContext? context}) async {
+  Future<void> openPort({
+    BuildContext? context,
+    VoidCallback? onClientConnected,
+    VoidCallback? onClientDisconnected,
+  }) async {
     const int port = 42069;
     try {
-      server = await ServerSocket.bind(InternetAddress.anyIPv4, port);
+      // FIX: Close any existing server before starting a new one
+      await server?.close();
+      server = null;
+
+      // FIX: Add shared: true
+      server = await ServerSocket.bind(InternetAddress.anyIPv4, port, shared: true);
       print('Server listening on port $port');
 
       server?.listen((Socket client) {
@@ -20,13 +29,14 @@ class DartFunction {
         client.setOption(SocketOption.tcpNoDelay, true);
 
         socket = client;
+        onClientConnected?.call();
 
         Navigator.pushAndRemoveUntil(context!, MaterialPageRoute(builder: (context) => const MainScreen()), (Route<dynamic> route) => false);
 
         client.listen(
           (data) {
             final rawString = String.fromCharCodes(data);
-            final messages = rawString.split('\n'); // Split TCP chunks safely
+            final messages = rawString.split('\n');
             for (var msg in messages) {
               if (msg.trim().isNotEmpty) {
                 ReceivedDataParser().parseData(msg.trim());
@@ -40,6 +50,7 @@ class DartFunction {
           onDone: () {
             print('Client disconnected');
             socket = null;
+            onClientDisconnected?.call();
             client.close();
           },
         );
@@ -53,6 +64,8 @@ class DartFunction {
     print("Closing port manually");
     socket?.close();
     server?.close();
+    socket = null;
+    server = null;
   }
 
   void _navigateToMain(BuildContext context) {
@@ -67,7 +80,7 @@ class DartFunction {
 
       socket!.listen((data) {
         final rawString = String.fromCharCodes(data);
-        final messages = rawString.split('\n'); // Split TCP chunks safely
+        final messages = rawString.split('\n');
         for (var msg in messages) {
           if (msg.trim().isNotEmpty) {
             ReceivedDataParser().parseData(msg.trim());
@@ -131,7 +144,6 @@ void shutdownHotspotSync() {
     ''';
     Process.runSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', psScript]);
   } else if (Platform.isLinux && globals.activeHotspotSsid != null) {
-    // Bring down the connection and delete the temporary profile
     Process.runSync('nmcli', ['connection', 'down', globals.activeHotspotSsid!]);
     Process.runSync('nmcli', ['connection', 'delete', globals.activeHotspotSsid!]);
   }
@@ -141,10 +153,8 @@ Future<void> hardCleanupOnStartup() async {
   print("Performing hard cleanup on startup...");
   try {
     if (Platform.isWindows) {
-      // 1. Force kill any ghost BLE processes from previous crashes by image name
       Process.runSync('taskkill', ['/F', '/IM', 'HotDropBLE.exe', '/T']);
 
-      // 2. Force shutdown Windows Hotspot unconditionally
       const psScript = '''
         \$ErrorActionPreference = 'SilentlyContinue'
         Add-Type -AssemblyName System.Runtime.WindowsRuntime
@@ -168,10 +178,8 @@ Future<void> hardCleanupOnStartup() async {
       ''';
       Process.runSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', psScript]);
     } else if (Platform.isLinux) {
-      // 1. Force kill any ghost BLE processes on Linux
       Process.runSync('pkill', ['-f', 'HotDropBLE']);
 
-      // 2. Find and delete any leftover HotDrop connections in NetworkManager
       final result = Process.runSync('nmcli', ['-t', '-f', 'NAME', 'connection', 'show']);
       final lines = result.stdout.toString().split('\n');
       for (var line in lines) {
@@ -190,5 +198,3 @@ void sendMessage(String message) {
   if (message.isEmpty) return;
   socket?.write(message);
 }
-
-

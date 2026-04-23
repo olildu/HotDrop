@@ -1,11 +1,15 @@
-import 'package:flutter/material.dart';
-import 'package:gap/gap.dart';
+import 'package:flutter/material.dart' hide ConnectionState;
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:test/presentation/widgets/main_screen/top_popup.dart';
-import 'package:test/logic/constants/globals.dart';
-import 'package:test/presentation/screens/contacts_screen.dart';
-import 'package:test/presentation/screens/hotdrop_screen.dart';
-import 'package:test/presentation/screens/messaging_screen.dart';
+import 'package:gap/gap.dart';
+import 'package:test/logic/cubits/connection_cubit.dart';
+import 'package:test/presentation/screens/main_screen_view_model.dart';
+import 'package:test/presentation/screens/widgets/main_screen_connection_selection.dart';
+import 'package:test/presentation/screens/widgets/main_screen_history.dart';
+import 'package:test/presentation/screens/widgets/main_screen_stats_header.dart';
+import 'package:test/presentation/screens/widgets/main_screen_top_bar.dart';
+import 'package:test/presentation/screens/widgets/main_screen_transfer_hub.dart';
+import 'package:test/presentation/theme/app_colors.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -17,75 +21,47 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
-    final List<Widget> pages = [const HotdropScreen(), const ContactScreen(), const MessagingScreen()];
+    return BlocBuilder<ConnectionCubit, ConnectionState>(
+      builder: (context, connectionState) {
+        final viewModel = MainScreenViewModel.fromState(connectionState);
+        final actions = MainScreenActions(context.read<ConnectionCubit>());
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: Row(
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              border: Border(
-                right: BorderSide(
-                  color: const Color.fromARGB(255, 231, 231, 231),
-                  width: 1.w,
-                ),
-              ),
-            ),
-            child: Drawer(
-              width: 250.w,
-              backgroundColor: const Color.fromARGB(255, 248, 248, 248),
-              child: ListView(
-                children: [
-                  Gap(10.h),
-                  ListTile(leading: Icon(Icons.android, size: 60.sp)),
-                  const Gap(20),
-                  _buildSectionHeader("Favourites"),
-                  _buildNavTile("HotDrop", Icons.wifi_tethering, 0),
-                  _buildNavTile("Contacts", Icons.contacts_outlined, 1),
-                  _buildNavTile("Messaging", Icons.chat_outlined, 2),
-                  Gap(20.h),
-                  _buildSectionHeader("Devices"),
-                  const ListTile(
-                    title: Text("Ebin's Android", style: TextStyle(fontWeight: FontWeight.w500)),
-                    leading: Icon(Icons.phone_android),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Expanded(
-            child: Stack(
+        return Scaffold(
+          backgroundColor: AppColors.surface,
+          body: SafeArea(
+            child: Column(
               children: [
-                Positioned.fill(child: pages[selectedIndex]),
-                const TopPopup() // Now internally uses BlocBuilder
+                MainScreenTopBar(viewModel: viewModel),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.symmetric(horizontal: 40.w, vertical: 20.h),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        MainScreenStatsHeader(viewModel: viewModel),
+                        Gap(40.h),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              flex: 13,
+                              child: viewModel.showTransferHub
+                                  ? MainScreenTransferHub(actions: actions)
+                                  : MainScreenConnectionSelection(viewModel: viewModel, actions: actions),
+                            ),
+                            Gap(40.w),
+                            const Expanded(flex: 7, child: MainScreenHistory()),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ],
             ),
-          )
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSectionHeader(String title) {
-    return ListTile(
-      title: Text(
-        title,
-        style: TextStyle(color: const Color.fromARGB(255, 86, 86, 86), fontSize: 18.sp, fontWeight: FontWeight.w500),
-      ),
-    );
-  }
-
-  Widget _buildNavTile(String title, IconData icon, int index) {
-    return ListTile(
-      mouseCursor: SystemMouseCursors.click,
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
-      leading: Icon(icon),
-      selected: selectedIndex == index,
-      onTap: () => setState(() => selectedIndex = index),
-      splashColor: const Color.fromARGB(255, 165, 165, 165).withOpacity(0.3),
+          ),
+        );
+      },
     );
   }
 }
-
-

@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:test/presentation/screens/main_screen.dart';
 
 import 'logic/cubits/app_lifecycle_cubit.dart';
 import 'logic/cubits/connection_cubit.dart';
@@ -78,7 +79,7 @@ class _DesktopSideState extends State<DesktopSide> with WidgetsBindingObserver {
         navigatorKey: navigatorKey,
         debugShowCheckedModeBanner: false,
         // theme: AppTheme.darkTheme,
-        home: const ConnectionScreen(),
+        home: const MainScreen(),
       ),
     );
   }

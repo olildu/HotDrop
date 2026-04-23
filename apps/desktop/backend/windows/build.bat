@@ -15,7 +15,7 @@ del HotDropBLE.spec 2>nul
 echo ===============================
 echo Building Python EXE...
 echo ===============================
-cd C:\Users\olildu\Documents\Code\Personal\HotDrop\apps\desktop\backend
+cd C:\Users\olildu\Documents\Code\Personal\HotDrop\apps\desktop\backend\windows
 
 pyinstaller --onefile --noconsole ^
 --name HotDropBLE ^
@@ -23,7 +23,6 @@ pyinstaller --onefile --noconsole ^
 --hidden-import winrt.windows.devices.bluetooth ^
 --hidden-import winrt.windows.devices.bluetooth.genericattributeprofile ^
 --hidden-import winrt.windows.storage.streams ^
-
 main.py
 
 echo ===============================
@@ -39,7 +38,7 @@ cd C:\Users\olildu\Documents\Code\Personal\HotDrop\apps\desktop\
 
 call flutter clean
 
-cd C:\Users\olildu\Documents\Code\Personal\HotDrop\apps\desktop\backend
+cd C:\Users\olildu\Documents\Code\Personal\HotDrop\apps\desktop\backend\windows
 
 echo ===============================
 echo DONE

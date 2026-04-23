@@ -6,9 +6,16 @@ import 'package:test/data/models/file_model.dart';
 class FileRepository {
   final HttpFunctions _httpFunctions = HttpFunctions();
 
-  Future<String?> downloadFile(FileModel file) async {
+  Future<String?> downloadFile(
+    FileModel file, {
+    void Function(double progress)? onProgress,
+  }) async {
     if (file.url == null) return null;
-    return await _httpFunctions.downloadFile(file.url!, file.name);
+    return await _httpFunctions.downloadFile(
+      file.url!,
+      file.name,
+      onProgress: onProgress,
+    );
   }
 
   Future<List<FileModel>> getLocalFiles() async {
@@ -23,4 +30,3 @@ class FileRepository {
     }).toList();
   }
 }
-

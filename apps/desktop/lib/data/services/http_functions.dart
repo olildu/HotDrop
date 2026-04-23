@@ -9,7 +9,11 @@ import 'package:test/data/services/common_functions.dart';
 import 'package:test/data/services/connection_services.dart';
 
 class HttpFunctions {
-  Future<String?> downloadFile(String url, String fileName) async {
+  Future<String?> downloadFile(
+    String url,
+    String fileName, {
+    void Function(double progress)? onProgress,
+  }) async {
     try {
       final stopwatch = Stopwatch()..start();
       final request = http.Request('GET', Uri.parse(url));
@@ -39,7 +43,7 @@ class HttpFunctions {
             if (totalBytes > 0) {
               final progress = downloadedBytes / totalBytes;
               final progressPercent = (progress * 100).toStringAsFixed(2);
-              
+
               // Notify remote peer of progress
               DartFunction().sendMessage(jsonEncode({
                 "type": "progress",
@@ -48,6 +52,7 @@ class HttpFunctions {
               }));
 
               sl<PopupCubit>().updateProgress(progress);
+              onProgress?.call(progress);
             }
           },
           onError: (e) {
@@ -67,12 +72,7 @@ class HttpFunctions {
         sl<PopupCubit>().show("Download complete!", Icons.check_circle_outline);
 
         // Notify remote peer of completion
-        DartFunction().sendMessage(jsonEncode({
-          "type": "downloadComplete", 
-          "transfer_speed": downloadSpeed, 
-          "name": fileName, 
-          "size": totalBytes
-        }));
+        DartFunction().sendMessage(jsonEncode({"type": "downloadComplete", "transfer_speed": downloadSpeed, "name": fileName, "size": totalBytes}));
 
         return filePath;
       } else {
@@ -86,4 +86,3 @@ class HttpFunctions {
     }
   }
 }
-

@@ -4,7 +4,6 @@ import json
 import tempfile
 import uuid
 import os
-from llama_cpp import Llama
 
 from bleak import BleakScanner, BleakClient
 from winrt.windows.devices.bluetooth.genericattributeprofile import (
@@ -140,113 +139,6 @@ async def fetch_connection_data(address):
 
 # --- END OF BLE LOGIC  ---
 
-# --- AI MODEL LOGIC ---
-MODEL_PATH = r"C:\\Users\\olildu\\Documents\\Code\\Personal\\HotDrop\\apps\\desktop\\assets\\bin\\model.gguf"
-
-llm = None
-
-SYSTEM_PROMPT = (
-    "You are the HotDrop AI Assistant, a highly specialized expert in decentralized peer-to-peer (P2P) file transfer systems. "
-    "You assist users in securely transferring files between Windows, Android and Linux devices using local-only communication.\n\n"
-
-    "CORE IDENTITY:\n"
-    "- You are precise, efficient, and technically competent.\n"
-    "- You prioritize clarity and actionable guidance over verbosity.\n"
-    "- You behave like a senior engineer guiding a user through a system.\n\n"
-
-    "SYSTEM CONTEXT:\n"
-    "- HotDrop uses Bluetooth Low Energy (BLE) for device discovery.\n"
-    "- All communication is strictly local (LAN or direct device-to-device).\n"
-    "- No cloud, internet, or external servers are involved at any stage.\n\n"
-
-    "RESPONSE RULES:\n"
-    "1. CONCISE: Default to 1-3 sentences unless deeper explanation is explicitly required.\n"
-    "2. STRUCTURED: Prefer clear, step-by-step guidance when explaining processes.\n"
-    "3. CONTEXT-AWARE: Tailor responses to file transfer, connectivity, or device interaction scenarios.\n"
-    "4. NO HALLUCINATION: If unsure, ask for clarification instead of guessing.\n"
-    "5. ACTIONABLE: Always provide practical next steps when possible.\n\n"
-
-    "TROUBLESHOOTING PROTOCOL:\n"
-    "- If a user reports connection issues:\n"
-    "  • Verify Bluetooth is enabled on both devices\n"
-    "  • Ensure both devices are on the same network (Wi-Fi or hotspot)\n"
-    "  • Restart the HotDrop app on both devices\n"
-    "  • Retry discovery and connection\n"
-    "- If issues persist, ask for device details and error messages.\n\n"
-
-    "FILE HANDLING LOGIC:\n"
-    "- If a user references an unknown file, request metadata (file type, size, and source).\n"
-    "- If discussing transfers, consider network conditions and device roles.\n\n"
-
-    "SECURITY & PRIVACY:\n"
-    "- Reinforce that all transfers are local and private.\n"
-    "- Never imply cloud usage or external data storage.\n\n"
-
-    "TONE:\n"
-    "- Professional, calm, and technically confident.\n"
-    "- Avoid unnecessary filler or casual language.\n"
-    "- Focus on being helpful and precise.\n\n"
-
-    "OUTPUT STYLE:\n"
-    "- Direct answers first, then optional clarification if needed.\n"
-    "- Avoid long paragraphs; prefer compact, readable responses.\n"
-)
-
-def init_llm():
-    global llm
-    try:
-        llm = Llama(model_path=MODEL_PATH, n_gpu_layers=-1, n_ctx=6144, verbose=False)
-        print("Model loaded successfully!")
-    except Exception as e:
-        print(f"Failed to load model: {e}")
-        llm = None
-
-async def generate_response(prompt):
-    if not llm:
-        return "Error: AI Model not loaded."
-    
-    loop = asyncio.get_running_loop()
-    
-    def run_llm():
-        formatted_prompt = (
-            "<start_of_turn>user\n"
-            f"{SYSTEM_PROMPT}\n\n"
-            f"User: {prompt}\n"
-            "<end_of_turn>\n"
-            "<start_of_turn>model\n"
-        )
-
-        response = llm(
-            formatted_prompt,
-            max_tokens=150,
-            temperature=0.6,
-            top_p=0.9,
-            stop=["<end_of_turn>", "User:"],
-            echo=False
-        )
-
-        output = response['choices'][0]['text'].strip()
-        return output if output else "I couldn't generate a response. Please try again."
-
-    result = await loop.run_in_executor(None, run_llm)
-    return result
-
-async def handle_ai_command(request):
-    command = request.get("command")
-
-    if command == "generate":
-        user_prompt = request.get("prompt", "")
-        print(f"Generating response for: {user_prompt[:50]}...")
-        answer = await generate_response(user_prompt)
-        return {"status": "success", "response": answer}
-    
-    elif command == "status":
-        return {"status": "success", "message": "AI Engine is running ready." if llm else "Model missing."}
-    
-    return None
-
-# --- END OF AI MODEL LOGIC  ---
-
 async def handle_client(reader, writer):
     global BLE_PAYLOAD_STRING
     try:
@@ -270,13 +162,6 @@ async def handle_client(reader, writer):
         elif command == "connect_to":
             response = await fetch_connection_data(request.get("address"))
 
-        else:
-            ai_response = await handle_ai_command(request)
-            if ai_response:
-                response = ai_response
-            else:
-                response = {"status": "error", "message": "Unknown command"}
-
         writer.write(json.dumps(response).encode())
         await writer.drain()
     except Exception as e:
@@ -287,7 +172,6 @@ async def handle_client(reader, writer):
 async def main():
     server = await asyncio.start_server(handle_client, "127.0.0.1", 8765)
     log("Python Socket server running")
-    init_llm()
     async with server: await server.serve_forever()
 
 if __name__ == "__main__":
