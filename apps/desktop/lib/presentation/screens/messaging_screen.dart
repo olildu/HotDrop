@@ -176,6 +176,10 @@ class MessagingScreenState extends State<MessagingScreen> {
                       style: TextStyle(color: Colors.white, fontSize: 14.sp),
                       cursorColor: AppColors.primaryContainer,
                       decoration: InputDecoration(
+                        filled: false,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        disabledBorder: InputBorder.none,
                         hintText: "Transmit message...",
                         hintStyle: TextStyle(color: Colors.grey, fontSize: 14.sp),
                         border: InputBorder.none,

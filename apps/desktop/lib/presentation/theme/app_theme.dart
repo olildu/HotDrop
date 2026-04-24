@@ -9,6 +9,8 @@ class AppTheme {
       brightness: Brightness.dark,
       scaffoldBackgroundColor: AppColors.surface,
 
+      fontFamily: GoogleFonts.inter().fontFamily,
+
       colorScheme: const ColorScheme.dark(
         primary: AppColors.primary,
         onPrimary: AppColors.surface,

@@ -53,6 +53,10 @@ class MainScreenTopBar extends StatelessWidget {
                       hintText: 'Search protocol...',
                       hintStyle: TextStyle(color: Colors.grey, fontSize: 12.sp),
                       border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      disabledBorder: InputBorder.none,
+                      filled: false, // Removes the unwanted grey box
                       isDense: true,
                     ),
                   ),

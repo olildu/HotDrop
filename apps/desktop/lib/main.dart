@@ -10,8 +10,8 @@ import 'logic/constants/globals.dart';
 import 'logic/injection_container.dart' as di;
 import 'presentation/screens/connection_screen.dart';
 import 'data/services/connection_services.dart';
+import 'package:test/presentation/theme/app_theme.dart';
 
-// Import all Cubits
 import 'logic/cubits/message_cubit.dart';
 import 'logic/cubits/contact_cubit.dart';
 import 'logic/cubits/contact_ui_cubit.dart';
@@ -78,7 +78,7 @@ class _DesktopSideState extends State<DesktopSide> with WidgetsBindingObserver {
       child: MaterialApp(
         navigatorKey: navigatorKey,
         debugShowCheckedModeBanner: false,
-        // theme: AppTheme.darkTheme,
+        theme: AppTheme.darkTheme,
         home: const MainScreen(),
       ),
     );
