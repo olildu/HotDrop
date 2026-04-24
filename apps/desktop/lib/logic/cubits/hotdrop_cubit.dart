@@ -341,26 +341,19 @@ class HotdropCubit extends Cubit<HotdropState> {
       return false;
     }
 
-    addBytesTransferredOnly(fileSize);
-
-    final completedTransfer = TransferHistoryItem(
+    // --- CHANGED: Don't add to completed immediately, make it active instead ---
+    final activeTransfer = TransferHistoryItem(
       fileName: fileName,
       sizeLabel: _formatSize(fileSize),
-      progress: 1,
-      isActive: false,
+      progress: 0.0, // Start at 0%
+      isActive: true, // Keep it active
       location: filePath,
       isAvailable: true,
       lastUpdatedMillis: DateTime.now().millisecondsSinceEpoch,
       isSent: true,
     );
 
-    final updatedHistory = <TransferHistoryItem>[
-      completedTransfer,
-      ...state.completedTransfers.where((item) => item.fileName != completedTransfer.fileName || item.location != completedTransfer.location),
-    ].take(50).toList(growable: false);
-
-    emit(state.copyWith(completedTransfers: updatedHistory));
-    await _persistHistory(updatedHistory);
+    emit(state.copyWith(activeTransfer: activeTransfer));
 
     await DartFunction().sendMessage(jsonEncode({
       'type': 'HotDropFile',
@@ -370,6 +363,43 @@ class HotdropCubit extends Cubit<HotdropState> {
     }));
 
     return true;
+  }
+
+  // --- NEW: Method to handle incoming progress updates ---
+  void updateOutgoingProgress(String fileName, double progress) {
+    if (state.activeTransfer != null && state.activeTransfer!.fileName == fileName) {
+      emit(state.copyWith(
+        activeTransfer: state.activeTransfer!.copyWith(progress: progress),
+      ));
+    }
+  }
+
+  // --- NEW: Method to handle the transfer completion ---
+  Future<void> completeOutgoingTransfer(String fileName, double speedBps, int size) async {
+    if (state.activeTransfer != null && state.activeTransfer!.fileName == fileName) {
+      addTransferStats(size, speedBps);
+
+      int elapsedMs = speedBps > 0 ? ((size / speedBps) * 1000).toInt() : 0;
+
+      final completedTransfer = state.activeTransfer!.copyWith(
+        progress: 1.0,
+        isActive: false,
+        speedLabel: _formatSpeed(size, elapsedMs),
+        lastUpdatedMillis: DateTime.now().millisecondsSinceEpoch,
+      );
+
+      final updatedHistory = <TransferHistoryItem>[
+        completedTransfer,
+        ...state.completedTransfers.where((item) => item.fileName != completedTransfer.fileName || item.location != completedTransfer.location),
+      ].take(50).toList(growable: false);
+
+      emit(state.copyWith(
+        clearActiveTransfer: true,
+        completedTransfers: updatedHistory,
+      ));
+
+      await _persistHistory(updatedHistory);
+    }
   }
 
   Future<void> pickAndSendFile() async {

@@ -11,26 +11,58 @@ import 'package:test/data/repositories/contact_repository.dart';
 
 class ReceivedDataParser {
   void parseData(String data) async {
-    var parsedData = jsonDecode(data);
+    // FIX: Handle clumped JSON objects (e.g., "{...}{...}")
+    String sanitizedData = data.replaceAll('}{', '}\n{');
+    List<String> messages = sanitizedData.split('\n');
 
-    // Handle Incoming Messages
-    if (parsedData["type"] == "message") {
-      sl<PopupCubit>().show("You have a new message", Icons.message_rounded);
-      sl<MessageCubit>().addMessage(MessageModel(
-        message: parsedData["content"],
-        sender: "Other",
-      ));
-    }
+    for (String msg in messages) {
+      if (msg.trim().isEmpty) continue;
 
-    // Handle Incoming Contacts
-    if (parsedData["type"] == "contacts") {
-      final contacts = sl<ContactRepository>().parseRawContacts(parsedData["content"]);
-      sl<ContactCubit>().replaceContacts(contacts);
-    }
+      try {
+        var parsedData = jsonDecode(msg);
 
-    // Handle Incoming HotDrop Files
-    if (parsedData["type"] == "HotDropFile") {
-      sl<HotdropCubit>().addFile(FileModel.fromMap(parsedData));
+        // Handle Incoming Messages
+        if (parsedData["type"] == "message") {
+          sl<PopupCubit>().show("You have a new message", Icons.message_rounded);
+          sl<MessageCubit>().addMessage(MessageModel(
+            message: parsedData["content"],
+            sender: "Other",
+          ));
+        }
+
+        // Handle Incoming Contacts
+        else if (parsedData["type"] == "contacts") {
+          final contacts = sl<ContactRepository>().parseRawContacts(parsedData["content"]);
+          sl<ContactCubit>().replaceContacts(contacts);
+        }
+
+        // Handle Incoming HotDrop Files (Mobile -> Desktop)
+        else if (parsedData["type"] == "HotDropFile") {
+          sl<HotdropCubit>().addFile(FileModel.fromMap(parsedData));
+        }
+
+        // --- NEW: Handle Outgoing Progress (Desktop -> Mobile) ---
+        else if (parsedData["type"] == "progress") {
+          final String rawPercent = parsedData["progress_percent"]?.toString() ?? "0.0";
+          double progressValue = double.tryParse(rawPercent) ?? 0.0;
+
+          // Convert 0-100% to 0.0-1.0 for the progress bar
+          double normalizedProgress = (progressValue / 100.0).clamp(0.0, 1.0);
+
+          sl<HotdropCubit>().updateOutgoingProgress(parsedData["name"] ?? parsedData["file_name"] ?? "", normalizedProgress);
+        }
+
+        // --- NEW: Handle Outgoing Completion (Desktop -> Mobile) ---
+        else if (parsedData["type"] == "downloadComplete") {
+          sl<HotdropCubit>().completeOutgoingTransfer(
+            parsedData["name"] ?? "",
+            (parsedData["transfer_speed"] ?? 0.0).toDouble(),
+            parsedData["size"] ?? 0,
+          );
+        }
+      } catch (e) {
+        // Ignore JSON parsing errors for partial chunks
+      }
     }
   }
 }
@@ -41,5 +73,3 @@ class OutgoingDataParser {
     sl<MessageCubit>().sendMessage(message);
   }
 }
-
-
