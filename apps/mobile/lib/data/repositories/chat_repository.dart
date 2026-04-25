@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as dev;
 import 'package:test_mobile/data/models/message_model.dart';
 import 'package:test_mobile/data/services/message_storage_service.dart';
 import 'package:test_mobile/data/services/connection_services.dart';
@@ -11,6 +12,7 @@ class ChatRepository {
 
   // Handles incoming messages from the socket
   void onMessageReceived(String content) {
+    dev.log('Received message of length ${content.length}', name: 'onMessageReceived');
     final message = MessageModel(
       content: content,
       isSent: false,
@@ -22,6 +24,7 @@ class ChatRepository {
 
   // Handles outgoing messages from the UI
   Future<void> sendMessage(String content) async {
+    dev.log('Sending message of length ${content.length}', name: 'sendMessage');
     final message = MessageModel(
       content: content,
       isSent: true,
@@ -38,7 +41,13 @@ class ChatRepository {
     await _storageService.saveMessage(message);
   }
 
-  Future<List<MessageModel>> getHistory() => _storageService.loadMessages();
+  Future<List<MessageModel>> getHistory() {
+    dev.log('Loading chat history', name: 'getHistory');
+    return _storageService.loadMessages();
+  }
 
-  void dispose() => _messageStreamController.close();
+  void dispose() {
+    dev.log('Disposing ChatRepository', name: 'dispose');
+    _messageStreamController.close();
+  }
 }

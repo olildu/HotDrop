@@ -1,4 +1,4 @@
-import 'dart:developer';
+import 'dart:developer' as dev;
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -37,7 +37,9 @@ class HotDropState {
 class HotDropCubit extends Cubit<HotDropState> {
   final FileHostingService _hostingService;
 
-  HotDropCubit(this._hostingService) : super(HotDropState(status: HotDropStatus.idle));
+  HotDropCubit(this._hostingService) : super(HotDropState(status: HotDropStatus.idle)) {
+    dev.log('Initializing HotDropCubit', name: 'HotDropCubit');
+  }
 
   bool get isUploading => state.status == HotDropStatus.uploading;
   bool get isComplete => state.status == HotDropStatus.complete;
@@ -55,6 +57,7 @@ class HotDropCubit extends Cubit<HotDropState> {
   }
 
   Future<void> pickAndHostFiles() async {
+    dev.log('Picking files to host', name: 'pickAndHostFiles');
     emit(state.copyWith(status: HotDropStatus.picking));
     final result = await FilePicker.platform.pickFiles(allowMultiple: true);
 
@@ -74,6 +77,7 @@ class HotDropCubit extends Cubit<HotDropState> {
   }
 
   Future<void> hostFiles(List<File> files) async {
+    dev.log('Hosting ${files.length} files', name: 'hostFiles');
     emit(state.copyWith(status: HotDropStatus.uploading, selectedFiles: files, progress: 0.0));
     try {
       await _hostingService.startHosting(files);
@@ -86,15 +90,16 @@ class HotDropCubit extends Cubit<HotDropState> {
   void updateProgress(double progress) {
     // Status must be 'uploading' for progress to be accepted
     if (state.status == HotDropStatus.uploading) {
-      log("Cubit emitting progress: $progress", name: "HotDropCubit");
+      dev.log("Cubit emitting progress: $progress", name: "updateProgress");
       emit(state.copyWith(progress: progress));
     } else {
-      log("Progress ignored. Status is ${state.status}", name: "HotDropCubit");
+      dev.log("Progress ignored. Status is ${state.status}", name: "updateProgress");
     }
   }
 
   // Called by ReceivedDataParser when Windows sends {"type": "downloadComplete"}
   void completeTransfer() {
+    dev.log('Transfer complete', name: 'completeTransfer');
     emit(state.copyWith(status: HotDropStatus.complete, progress: 1.0));
 
     // Revert to Idle after showing "Complete" for 3 seconds
@@ -104,7 +109,13 @@ class HotDropCubit extends Cubit<HotDropState> {
   }
 
   void reset() {
+    dev.log('Resetting HotDropCubit state', name: 'reset');
     _hostingService.dispose();
     emit(HotDropState(status: HotDropStatus.idle));
+  }
+  @override
+  Future<void> close() {
+    dev.log('Closing HotDropCubit', name: 'close');
+    return super.close();
   }
 }

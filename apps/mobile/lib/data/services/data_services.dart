@@ -19,7 +19,12 @@ class ReceivedDataParser {
 
   ReceivedDataParser(this._fileRepository);
 
+  void _log(String functionName, String message, {Object? error, StackTrace? stackTrace}) {
+    log(message, name: functionName, error: error, stackTrace: stackTrace);
+  }
+
   void parseData(String data) {
+    _log('parseData', 'Received raw socket data (${data.length} chars)');
     // FIX: Handle clumped JSON objects (e.g., "{...}{...}") by inserting newlines before parsing
     String sanitizedData = data.replaceAll('}{', '}\n{');
     List<String> messages = sanitizedData.split('\n');
@@ -31,16 +36,19 @@ class ReceivedDataParser {
         var parsedData = jsonDecode(msg);
 
         if (parsedData["type"] == "message") {
+          _log('parseData', 'Handling incoming chat message');
           final content = parsedData["content"];
           di.sl<ChatRepository>().onMessageReceived(content);
           di.sl<PopupCubit>().show('New message: $content', Icons.message_rounded);
         } else if (parsedData["type"] == "HotDropFile") {
+          _log('parseData', 'Handling incoming HotDrop file metadata');
           final fileName = parsedData["name"]?.toString() ?? 'Incoming file';
           di.sl<PopupCubit>().show('Incoming file: $fileName', Icons.download_rounded, progress: 0);
           _downloadFileFromHost(parsedData["url"], parsedData["name"], parsedData["size"]);
         }
         // FIX: Match the actual type "downloadProgress" seen in logs
         else if (parsedData["type"] == "progress") {
+          _log('parseData', 'Handling incoming transfer progress update');
           // Parse string percentage (e.g., "0.27") to double
           final String rawPercent = parsedData["progress_percent"] ?? "0.0";
           double progressValue = double.tryParse(rawPercent) ?? 0.0;
@@ -48,10 +56,11 @@ class ReceivedDataParser {
           // Scale 0-100 down to 0.0-1.0 for the LinearProgressIndicator
           double normalizedProgress = (progressValue / 100.0).clamp(0.0, 1.0);
 
-          log("Updating UI progress to: ${(normalizedProgress * 100).toInt()}%", name: "Parser");
+          _log('parseData', 'Updating UI progress to: ${(normalizedProgress * 100).toInt()}%');
           di.sl<HotDropCubit>().updateProgress(normalizedProgress);
           di.sl<PopupCubit>().updateProgress(normalizedProgress);
         } else if (parsedData["type"] == "downloadComplete") {
+          _log('parseData', 'Handling incoming transfer completion update');
           di.sl<HotDropCubit>().completeTransfer();
 
           final hostingService = di.sl<FileHostingService>();
@@ -75,7 +84,7 @@ class ReceivedDataParser {
           _fileRepository.onFileProcessed(fileModel);
         }
       } catch (e) {
-        log("Error parsing incoming socket data: $e");
+        _log('parseData', 'Failed to parse incoming message chunk', error: e);
       }
     }
   }
@@ -137,7 +146,7 @@ class ReceivedDataParser {
         di.sl<PopupCubit>().hide();
       }
     } catch (e) {
-      log("Download error: $e");
+      _log('_downloadFileFromHost', 'Download error', error: e);
       di.sl<PopupCubit>().hide();
     }
   }
@@ -146,11 +155,13 @@ class ReceivedDataParser {
 class OutgoingDataParser {
   /// Encapsulates a text message into JSON for transmission over the socket
   void parseMessages(String message) {
+    log('Forwarding outgoing chat message (${message.length} chars)', name: 'parseMessages');
     DartFunction().sendDataToSocket(jsonEncode({"type": "message", "content": message}));
   }
 
   /// Encapsulates contact information for initial device handshakes
   Future<void> parseContacts(List<Contact> contacts) async {
+    log('Handling outgoing contacts payload (${contacts.length} contacts)', name: 'parseContacts');
     DartFunction().sendDataToSocket(jsonEncode({
       "type": "contacts",
       "format": "list",

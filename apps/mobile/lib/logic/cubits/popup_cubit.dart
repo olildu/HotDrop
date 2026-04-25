@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as dev;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -32,11 +33,14 @@ class PopupState {
 }
 
 class PopupCubit extends Cubit<PopupState> {
-  PopupCubit() : super(PopupState());
+  PopupCubit() : super(PopupState()) {
+    dev.log('Initializing PopupCubit', name: 'PopupCubit');
+  }
 
   Timer? _hideTimer;
 
   void show(String message, IconData icon, {double progress = -1}) {
+    dev.log('Showing popup: $message (progress: $progress)', name: 'show');
     _hideTimer?.cancel();
     emit(
       state.copyWith(
@@ -53,11 +57,13 @@ class PopupCubit extends Cubit<PopupState> {
   }
 
   void updateProgress(double progress) {
+    dev.log('Updating popup progress to $progress', name: 'updateProgress');
     _hideTimer?.cancel();
     emit(state.copyWith(progress: progress, showPopup: true));
   }
 
   void complete(String message, {IconData icon = Icons.check_circle_rounded}) {
+    dev.log('Completing popup: $message', name: 'complete');
     _hideTimer?.cancel();
     emit(
       state.copyWith(
@@ -71,12 +77,14 @@ class PopupCubit extends Cubit<PopupState> {
   }
 
   void hide() {
+    dev.log('Hiding popup', name: 'hide');
     _hideTimer?.cancel();
     emit(state.copyWith(showPopup: false, progress: -1));
   }
 
   @override
   Future<void> close() {
+    dev.log('Closing PopupCubit', name: 'close');
     _hideTimer?.cancel();
     return super.close();
   }
