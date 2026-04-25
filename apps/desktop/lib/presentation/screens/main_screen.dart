@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:gap/gap.dart';
 import 'package:test/logic/cubits/connection_cubit.dart';
+import 'package:test/logic/constants/globals.dart' as globals;
 import 'package:test/presentation/screens/main_screen_view_model.dart';
 import 'package:test/presentation/screens/widgets/main_screen_connection_selection.dart';
 import 'package:test/presentation/screens/widgets/main_screen_history.dart';
@@ -19,6 +20,12 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
+  @override
+  void initState() {
+    super.initState();
+    globals.currentScreen = globals.AppScreen.main;
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<ConnectionCubit, ConnectionState>(

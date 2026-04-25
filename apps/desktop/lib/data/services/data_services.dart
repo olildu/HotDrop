@@ -30,7 +30,7 @@ class ReceivedDataParser {
         // Handle Incoming Messages
         if (parsedData["type"] == "message") {
           _log('parseData', 'Handling incoming chat message');
-          sl<PopupCubit>().show("You have a new message", Icons.message_rounded);
+          sl<PopupCubit>().showMessageNotification("You have a new message", Icons.message_rounded);
           sl<MessageCubit>().addMessage(MessageModel(
             message: parsedData["content"],
             sender: "Other",

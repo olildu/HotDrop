@@ -45,11 +45,9 @@ class MainScreenStatsHeader extends StatelessWidget {
                   ],
                 ),
                 const Spacer(),
-                _StatItem(label: 'BEAMING SPEED', value: formattedSpeed['value']!, unit: formattedSpeed['unit']!),
+                _StatItem(label: 'AVERAGE SPEED', value: formattedSpeed['value']!, unit: formattedSpeed['unit']!),
                 Gap(40.w),
-                const _StatItem(label: 'ACTIVE PEERS', value: '142', unit: ''),
-                Gap(40.w),
-                const _StatItem(label: 'UPTIME', value: '99.9', unit: '%'),
+                _StatItem(label: "FILES SENT", value: state.transferCount.toString(), unit: "FILES"),
               ],
             );
           },

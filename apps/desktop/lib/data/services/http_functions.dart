@@ -38,7 +38,7 @@ class HttpFunctions {
         final totalBytes = response.contentLength ?? 0;
 
         // Use PopupCubit via sl instead of Provider
-        sl<PopupCubit>().show("Receiving file...", Icons.download, progress: 0);
+        sl<PopupCubit>().showFileNotification("Receiving file...", Icons.download, progress: 0);
 
         await response.stream.listen(
           (chunk) {
@@ -62,7 +62,7 @@ class HttpFunctions {
           },
           onError: (e) {
             _log('downloadFile', 'Error while streaming file response', error: e);
-            sl<PopupCubit>().hide();
+            sl<PopupCubit>().hideFileNotification();
           },
           cancelOnError: true,
         ).asFuture();
@@ -75,7 +75,7 @@ class HttpFunctions {
         final downloadSpeed = downloadedBytes / elapsedTimeInSeconds;
         _log('downloadFile', 'Download completed in ${elapsedTimeInSeconds.toStringAsFixed(2)}s at ${downloadSpeed.toStringAsFixed(2)} B/s');
 
-        sl<PopupCubit>().show("Download complete!", Icons.check_circle_outline);
+        sl<PopupCubit>().showFileNotification("Download complete!", Icons.check_circle_outline);
 
         // Notify remote peer of completion
         DartFunction().sendMessage(jsonEncode({"type": "downloadComplete", "transfer_speed": downloadSpeed, "name": fileName, "size": totalBytes}));
@@ -83,12 +83,12 @@ class HttpFunctions {
         return filePath;
       } else {
         _log('downloadFile', 'Download failed with status code ${response.statusCode}');
-        sl<PopupCubit>().show("Download failed", Icons.error_outline);
+        sl<PopupCubit>().showFileNotification("Download failed", Icons.error_outline);
         return null;
       }
     } catch (e) {
       _log('downloadFile', 'Error downloading file', error: e);
-      sl<PopupCubit>().show("Download error", Icons.error_outline);
+      sl<PopupCubit>().showFileNotification("Download error", Icons.error_outline);
       return null;
     }
   }

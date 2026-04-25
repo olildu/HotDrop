@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:test/logic/constants/globals.dart' as globals;
 
 class PopupState {
   final bool showPopup;
@@ -49,8 +50,36 @@ class PopupCubit extends Cubit<PopupState> {
     }
   }
 
+  void showMessageNotification(String msg, IconData icon, {double progress = -1}) {
+    if (globals.currentScreen != globals.AppScreen.main) {
+      return;
+    }
+
+    show(msg, icon, progress: progress);
+  }
+
+  void showFileNotification(String msg, IconData icon, {double progress = -1}) {
+    if (globals.currentScreen != globals.AppScreen.messaging) {
+      return;
+    }
+
+    show(msg, icon, progress: progress);
+  }
+
   void updateProgress(double value) {
+    if (globals.currentScreen != globals.AppScreen.messaging || !state.showPopup) {
+      return;
+    }
+
     emit(state.copyWith(progress: value, showPopup: true));
+  }
+
+  void hideFileNotification() {
+    if (globals.currentScreen != globals.AppScreen.messaging) {
+      return;
+    }
+
+    hide();
   }
 
   void hide() {

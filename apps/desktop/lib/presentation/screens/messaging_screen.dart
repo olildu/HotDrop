@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:gap/gap.dart';
 import 'package:test/logic/cubits/message_cubit.dart';
+import 'package:test/logic/constants/globals.dart' as globals;
 import 'package:test/data/models/message_model.dart';
 import 'package:test/presentation/theme/app_colors.dart';
 
@@ -18,7 +19,14 @@ class MessagingScreenState extends State<MessagingScreen> {
   final ScrollController _scrollController = ScrollController();
 
   @override
+  void initState() {
+    super.initState();
+    globals.currentScreen = globals.AppScreen.messaging;
+  }
+
+  @override
   void dispose() {
+    globals.currentScreen = globals.AppScreen.main;
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
