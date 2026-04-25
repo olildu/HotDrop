@@ -55,6 +55,7 @@ class MainScreenHistory extends StatelessWidget {
                 size: state.activeTransfer!.sizeLabel,
                 speed: state.activeTransfer!.speedLabel,
                 progress: state.activeTransfer!.progress,
+                isSending: state.activeTransfer!.isSent,
                 isActive: true,
               ),
             if (state.activeTransfer == null && completedTransfers.isEmpty)
@@ -116,6 +117,7 @@ class _TransferCard extends StatelessWidget {
   final String? speed;
   final double? progress;
   final String? statusText;
+  final bool isSending;
   final bool isActive;
 
   const _TransferCard({
@@ -125,6 +127,7 @@ class _TransferCard extends StatelessWidget {
     this.speed,
     this.progress,
     this.statusText,
+    this.isSending = false,
     this.isActive = false,
   });
 
@@ -163,7 +166,7 @@ class _TransferCard extends StatelessWidget {
                     Gap(5.h),
                     Text(
                       isActive
-                          ? (speed != null && speed!.isNotEmpty ? '$size  •  $speed' : '$size  •  Receiving...')
+                          ? (speed != null && speed!.isNotEmpty ? '$size  •  $speed' : '$size  •  ${isSending ? 'Sending...' : 'Receiving...'}')
                           : '$size  •  ${statusText ?? 'Completed'}',
                       style: TextStyle(color: Colors.grey, fontSize: 10.sp),
                     ),

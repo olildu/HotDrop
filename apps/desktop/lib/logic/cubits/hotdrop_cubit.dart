@@ -440,7 +440,17 @@ class HotdropCubit extends Cubit<HotdropState> {
 
   Future<String?> _resolveSenderIp() async {
     if (globals.currentServerIp != null && globals.currentServerIp!.isNotEmpty) {
+      dev.log('Using cached sender IP: ${globals.currentServerIp}', name: '_resolveSenderIp');
       return globals.currentServerIp;
+    }
+
+    if (socket != null) {
+      final socketAddress = socket!.address;
+      if (socketAddress.type == InternetAddressType.IPv4 && !socketAddress.isLoopback) {
+        globals.currentServerIp = socketAddress.address;
+        dev.log('Resolved sender IP from active socket endpoint: ${socketAddress.address}', name: '_resolveSenderIp');
+        return socketAddress.address;
+      }
     }
 
     try {
@@ -449,11 +459,14 @@ class HotdropCubit extends Cubit<HotdropState> {
         for (final address in interface.addresses) {
           if (address.type == InternetAddressType.IPv4 && !address.isLoopback) {
             globals.currentServerIp = address.address;
+            dev.log('Resolved sender IP from interface ${interface.name}: ${address.address}', name: '_resolveSenderIp');
             return address.address;
           }
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      dev.log('Failed to resolve sender IP', name: '_resolveSenderIp', error: e);
+    }
 
     return null;
   }
