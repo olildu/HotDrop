@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:developer';
+import 'dart:developer' as dev;
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -9,11 +9,16 @@ import 'package:test/data/services/common_functions.dart';
 import 'package:test/data/services/connection_services.dart';
 
 class HttpFunctions {
+  void _log(String functionName, String message, {Object? error, StackTrace? stackTrace}) {
+    dev.log(message, name: functionName, error: error, stackTrace: stackTrace);
+  }
+
   Future<String?> downloadFile(
     String url,
     String fileName, {
     void Function(double progress)? onProgress,
   }) async {
+    _log('downloadFile', 'Starting download from $url for $fileName');
     try {
       final stopwatch = Stopwatch()..start();
       final request = http.Request('GET', Uri.parse(url));
@@ -56,7 +61,7 @@ class HttpFunctions {
             }
           },
           onError: (e) {
-            log("Error while streaming: $e");
+            _log('downloadFile', 'Error while streaming file response', error: e);
             sl<PopupCubit>().hide();
           },
           cancelOnError: true,
@@ -68,6 +73,7 @@ class HttpFunctions {
 
         final elapsedTimeInSeconds = stopwatch.elapsedMilliseconds / 1000;
         final downloadSpeed = downloadedBytes / elapsedTimeInSeconds;
+        _log('downloadFile', 'Download completed in ${elapsedTimeInSeconds.toStringAsFixed(2)}s at ${downloadSpeed.toStringAsFixed(2)} B/s');
 
         sl<PopupCubit>().show("Download complete!", Icons.check_circle_outline);
 
@@ -76,11 +82,12 @@ class HttpFunctions {
 
         return filePath;
       } else {
+        _log('downloadFile', 'Download failed with status code ${response.statusCode}');
         sl<PopupCubit>().show("Download failed", Icons.error_outline);
         return null;
       }
     } catch (e) {
-      log("Error downloading file: $e");
+      _log('downloadFile', 'Error downloading file', error: e);
       sl<PopupCubit>().show("Download error", Icons.error_outline);
       return null;
     }

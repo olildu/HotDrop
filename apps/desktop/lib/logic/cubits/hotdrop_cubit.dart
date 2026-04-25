@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as dev;
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -143,6 +144,7 @@ class HotdropCubit extends Cubit<HotdropState> {
   bool _historyLoaded = false;
 
   HotdropCubit(this._fileRepository) : super(HotdropState.initial()) {
+    dev.log('Initializing HotdropCubit', name: 'HotdropCubit');
     _loadStats();
     loadExistingFiles(loadHistory: true);
   }
@@ -221,6 +223,7 @@ class HotdropCubit extends Cubit<HotdropState> {
   }
 
   Future<void> loadExistingFiles({bool loadHistory = false}) async {
+    dev.log('Loading existing files (loadHistory=$loadHistory)', name: 'loadExistingFiles');
     final files = await _fileRepository.getLocalFiles();
     final persistedHistory = loadHistory || !_historyLoaded ? await _loadPersistedHistory() : state.completedTransfers;
 
@@ -254,6 +257,7 @@ class HotdropCubit extends Cubit<HotdropState> {
   }
 
   Future<void> addFile(FileModel file) async {
+    dev.log('Adding incoming file transfer for ${file.name}', name: 'addFile');
     final activeTransfer = TransferHistoryItem(
       fileName: file.name,
       sizeLabel: _formatSize(file.size),
@@ -317,13 +321,16 @@ class HotdropCubit extends Cubit<HotdropState> {
       await _persistHistory(updatedHistory);
       loadExistingFiles();
     } else {
+      dev.log('File download failed or canceled for ${file.name}', name: 'addFile');
       emit(state.copyWith(clearActiveTransfer: true));
     }
   }
 
   Future<bool> sendLocalFilePath(String filePath) async {
+    dev.log('Preparing local file send for $filePath', name: 'sendLocalFilePath');
     final entityType = FileSystemEntity.typeSync(filePath, followLinks: false);
     if (entityType != FileSystemEntityType.file) {
+      dev.log('Path is not a file: $filePath', name: 'sendLocalFilePath');
       return false;
     }
 
@@ -333,11 +340,13 @@ class HotdropCubit extends Cubit<HotdropState> {
 
     final currentIp = await _resolveSenderIp();
     if (currentIp == null) {
+      dev.log('Unable to resolve sender IP for file send', name: 'sendLocalFilePath');
       return false;
     }
 
     final fileUrl = await FileServerService().startFileServer(filePath, currentIp);
     if (fileUrl == null) {
+      dev.log('Failed to start file server for $filePath', name: 'sendLocalFilePath');
       return false;
     }
 
@@ -362,11 +371,14 @@ class HotdropCubit extends Cubit<HotdropState> {
       'url': fileUrl,
     }));
 
+    dev.log('Sent HotDropFile metadata for $fileName', name: 'sendLocalFilePath');
+
     return true;
   }
 
   // --- NEW: Method to handle incoming progress updates ---
   void updateOutgoingProgress(String fileName, double progress) {
+    dev.log('Outgoing progress update for $fileName: ${(progress * 100).toStringAsFixed(1)}%', name: 'updateOutgoingProgress');
     if (state.activeTransfer != null && state.activeTransfer!.fileName == fileName) {
       emit(state.copyWith(
         activeTransfer: state.activeTransfer!.copyWith(progress: progress),
@@ -376,6 +388,7 @@ class HotdropCubit extends Cubit<HotdropState> {
 
   // --- NEW: Method to handle the transfer completion ---
   Future<void> completeOutgoingTransfer(String fileName, double speedBps, int size) async {
+    dev.log('Completing outgoing transfer for $fileName', name: 'completeOutgoingTransfer');
     if (state.activeTransfer != null && state.activeTransfer!.fileName == fileName) {
       addTransferStats(size, speedBps);
 
@@ -403,6 +416,7 @@ class HotdropCubit extends Cubit<HotdropState> {
   }
 
   Future<void> pickAndSendFile() async {
+    dev.log('Opening file picker for outgoing transfer', name: 'pickAndSendFile');
     final result = await FilePicker.platform.pickFiles();
     if (result == null || result.files.single.path == null) {
       return;
@@ -412,6 +426,7 @@ class HotdropCubit extends Cubit<HotdropState> {
   }
 
   Future<int> sendDroppedFiles(List<String> filePaths) async {
+    dev.log('Sending dropped files count=${filePaths.length}', name: 'sendDroppedFiles');
     var sentCount = 0;
     for (final filePath in filePaths) {
       final sent = await sendLocalFilePath(filePath);

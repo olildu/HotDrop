@@ -1,13 +1,18 @@
 import 'dart:io';
 import 'dart:convert';
-import 'dart:developer';
+import 'dart:developer' as dev;
 
 class LocalAiService {
   final String _host = '127.0.0.1';
   final int _port = 8765;
 
+  void _log(String functionName, String message, {Object? error, StackTrace? stackTrace}) {
+    dev.log(message, name: functionName, error: error, stackTrace: stackTrace);
+  }
+
   /// Internal helper to send commands to the Python sidecar
   Future<Map<String, dynamic>?> _sendCommand(String cmd, [Map<String, dynamic>? extras]) async {
+    _log('_sendCommand', 'Sending command: $cmd');
     try {
       final socket = await Socket.connect(_host, _port);
 
@@ -22,39 +27,40 @@ class LocalAiService {
       final responseString = await socket.cast<List<int>>().transform(utf8.decoder).join();
       socket.destroy();
 
-      log("Raw backend response: $responseString", name: 'LocalAiService');
+      _log('_sendCommand', 'Raw backend response received for: $cmd');
 
       return jsonDecode(responseString);
     } catch (e) {
-      log("AI Socket communication error: $e", name: 'LocalAiService');
+      _log('_sendCommand', 'AI socket communication error', error: e);
       return null;
     }
   }
 
   /// Checks if the Llama model was successfully loaded by the Python script
   Future<bool> checkAiStatus() async {
+    _log('checkAiStatus', 'Checking local AI service status');
     final response = await _sendCommand("status");
 
     if (response != null && response['status'] == 'success') {
-      log(response['message'], name: 'LocalAiService');
+      _log('checkAiStatus', response['message']?.toString() ?? 'AI status success');
       return true;
     } else {
-      log(response?['message'] ?? "Failed to connect to AI Engine.", name: 'LocalAiService');
+      _log('checkAiStatus', response?['message']?.toString() ?? 'Failed to connect to AI Engine.');
       return false;
     }
   }
 
   /// Sends a prompt to the Gemma model and returns the response
   Future<String> generateResponse(String userPrompt) async {
-    log("Sending prompt to AI: $userPrompt", name: 'LocalAiService');
+    _log('generateResponse', 'Sending prompt to AI (${userPrompt.length} chars)');
 
     final response = await _sendCommand("generate", {"prompt": userPrompt});
 
     if (response != null && response['status'] == 'success') {
-      log("AI Generated Response: ${response['response']}", name: 'LocalAiService');
+      _log('generateResponse', 'AI response generated successfully');
       return response['response'];
     } else {
-      log("AI Generation Error Payload: $response", name: 'LocalAiService');
+      _log('generateResponse', 'AI generation failed: $response');
       return "Error: Could not generate a response. Please check if the model is loaded.";
     }
   }

@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:developer';
+import 'dart:developer' as dev;
 import 'dart:io';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -60,9 +60,14 @@ class ConnectionCubit extends Cubit<ConnectionState> {
   String? _hotspotSsid;
   String? _hotspotPassword;
 
+  void _log(String functionName, String message, {Object? error, StackTrace? stackTrace}) {
+    dev.log(message, name: functionName, error: error, stackTrace: stackTrace);
+  }
+
   ConnectionCubit() : super(const ConnectionState());
 
   Future<void> startHosting() async {
+    _log('startHosting', 'Host mode selected');
     emit(
       state.copyWith(
         selectedRole: ConnectionRole.host,
@@ -86,6 +91,7 @@ class ConnectionCubit extends Cubit<ConnectionState> {
   }
 
   Future<void> startJoining() async {
+    _log('startJoining', 'Join mode selected. Starting BLE host scan');
     emit(
       state.copyWith(
         selectedRole: ConnectionRole.join,
@@ -127,11 +133,12 @@ class ConnectionCubit extends Cubit<ConnectionState> {
           ),
         );
       },
-      (msg) => log(msg, name: 'BLE_STREAM'),
+      (msg) => _log('streamAvailableHosts', msg),
     );
   }
 
   Future<void> connectToPeer(String address, String name) async {
+    _log('connectToPeer', 'Attempting peer connection to $name ($address)');
     emit(
       state.copyWith(
         isProcessing: true,
@@ -142,7 +149,7 @@ class ConnectionCubit extends Cubit<ConnectionState> {
     final data = await globals.bleInteropService.fetchConnectionData(
       address,
       name,
-      (msg) => log(msg),
+      (msg) => _log('fetchConnectionData', msg),
     );
 
     if (isClosed) {
@@ -162,7 +169,7 @@ class ConnectionCubit extends Cubit<ConnectionState> {
     final String? ssid = data['ssid'];
     final String? password = data['password'];
 
-    if (Platform.isWindows && ssid != null && password != null && ssid.isNotEmpty && password.isNotEmpty) {
+    if ((Platform.isWindows || Platform.isLinux) && ssid != null && password != null && ssid.isNotEmpty && password.isNotEmpty) {
       bool wifiConnected = false;
       if (Platform.isWindows) {
         wifiConnected = await _connectToWindowsWifi(ssid, password);
@@ -213,6 +220,8 @@ class ConnectionCubit extends Cubit<ConnectionState> {
 
     try {
       await DartFunction().connectToHost(data['ip'], context: context);
+      _log('connectToPeer', 'Socket connected to peer successfully');
+      emit(state.copyWith(isProcessing: false, loadingStatus: 'Connected'));
     } catch (e) {
       if (isClosed) {
         return;
@@ -224,10 +233,12 @@ class ConnectionCubit extends Cubit<ConnectionState> {
           loadingStatus: 'Socket connection failed. Are you on the same network?',
         ),
       );
+      _log('connectToPeer', 'Socket connection failed', error: e);
     }
   }
 
   void disconnect() {
+    _log('disconnect', 'Disconnect requested. Resetting connection state');
     _hotspotSsid = null;
     _hotspotPassword = null;
     globals.currentServerIp = null;
@@ -245,6 +256,7 @@ class ConnectionCubit extends Cubit<ConnectionState> {
   }
 
   Future<void> _initializeServer() async {
+    _log('_initializeServer', 'Initializing hosting server for ${Platform.operatingSystem}');
     if (Platform.isWindows) {
       emit(state.copyWith(loadingStatus: 'Checking permissions...'));
 
@@ -262,7 +274,7 @@ class ConnectionCubit extends Cubit<ConnectionState> {
       emit(state.copyWith(loadingStatus: 'Enabling Mobile Hotspot...'));
       final hotspotStatus = await _enableWindowsHotspot();
       if (hotspotStatus == HotspotStatus.noInternet) {
-        log('No internet to share. Will attempt to bind to standard Wi-Fi.');
+        _log('_initializeServer', 'No internet to share. Will attempt to bind to standard Wi-Fi.');
       }
 
       emit(state.copyWith(loadingStatus: 'Waiting for adapter...'));
@@ -272,7 +284,7 @@ class ConnectionCubit extends Cubit<ConnectionState> {
 
       final hotspotStatus = await _enableLinuxHotspot();
       if (hotspotStatus != HotspotStatus.success) {
-        log('Could not create Linux Hotspot. Falling back to existing Wi-Fi network.');
+        _log('_initializeServer', 'Could not create Linux hotspot. Falling back to existing Wi-Fi network.');
       }
 
       emit(state.copyWith(loadingStatus: 'Waiting for adapter...'));
@@ -287,7 +299,7 @@ class ConnectionCubit extends Cubit<ConnectionState> {
     try {
       final checkNmcli = await Process.run('which', ['nmcli']);
       if (checkNmcli.exitCode != 0) {
-        log('nmcli is not installed. Cannot manage hotspot.');
+        _log('_enableLinuxHotspot', 'nmcli is not installed. Cannot manage hotspot.');
         return HotspotStatus.error;
       }
 
@@ -295,7 +307,7 @@ class ConnectionCubit extends Cubit<ConnectionState> {
       final ssid = 'HotDrop_$safeHostname';
       final password = 'HotDrop${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}';
 
-      log('Executing nmcli to create hotspot...');
+      _log('_enableLinuxHotspot', 'Executing nmcli to create hotspot');
       final result = await Process.run('nmcli', ['device', 'wifi', 'hotspot', 'ssid', ssid, 'password', password]);
 
       if (result.exitCode == 0) {
@@ -305,14 +317,14 @@ class ConnectionCubit extends Cubit<ConnectionState> {
         globals.isHotspotActive = true;
         globals.activeHotspotSsid = ssid;
 
-        log('Linux Hotspot started successfully: SSID: $ssid');
+        _log('_enableLinuxHotspot', 'Linux hotspot started successfully: SSID=$ssid');
         return HotspotStatus.success;
       }
 
-      log('Failed to start Linux hotspot: ${result.stderr}');
+      _log('_enableLinuxHotspot', 'Failed to start Linux hotspot: ${result.stderr}');
       return HotspotStatus.error;
     } catch (e) {
-      log('Error executing nmcli: $e');
+      _log('_enableLinuxHotspot', 'Error executing nmcli', error: e);
       return HotspotStatus.error;
     }
   }
@@ -333,15 +345,26 @@ class ConnectionCubit extends Cubit<ConnectionState> {
 
       exit(0);
     } catch (e) {
-      log('Error checking or elevating privileges: $e');
+      _log('_ensureAdminPrivileges', 'Error checking or elevating privileges', error: e);
       return false;
     }
   }
 
+
   Future<bool> _connectToLinuxWifi(String ssid, String password) async {
-    emit(state.copyWith(loadingStatus: 'Connecting to Wi-Fi: $ssid (Linux)...'));
+    emit(state.copyWith(loadingStatus: 'Refreshing Wi-Fi list...'));
+    
     try {
-      // nmcli device wifi connect <SSID> password <PASSWORD>
+      // 1. Force a rescan so nmcli "sees" the hotspot
+      _log('_connectToLinuxWifi', 'Requesting Wi-Fi rescan');
+      await Process.run('nmcli', ['device', 'wifi', 'rescan']);
+      
+      // 2. Wait 2 seconds for the scan to populate results
+      await Future.delayed(const Duration(seconds: 2));
+
+      emit(state.copyWith(loadingStatus: 'Connecting to Wi-Fi: $ssid (Linux)...'));
+
+      // 3. Attempt connection
       final result = await Process.run('nmcli', [
         'device',
         'wifi',
@@ -352,14 +375,32 @@ class ConnectionCubit extends Cubit<ConnectionState> {
       ]);
 
       if (result.exitCode == 0) {
-        log('Successfully connected to Wi-Fi: $ssid');
+        _log('_connectToLinuxWifi', 'Successfully connected to Wi-Fi: $ssid');
         return true;
       }
 
-      log('Linux Wi-Fi connection failed: ${result.stderr}');
+      // 4. If it fails, try one more time specifically as a "hidden" network 
+      // (some Android hotspots report as hidden to nmcli)
+      _log('_connectToLinuxWifi', 'Initial attempt failed, retrying as hidden...');
+      final retryResult = await Process.run('nmcli', [
+        'device',
+        'wifi',
+        'connect',
+        ssid,
+        'password',
+        password,
+        'hidden',
+        'yes'
+      ]);
+
+      if (retryResult.exitCode == 0) {
+        return true;
+      }
+
+      _log('_connectToLinuxWifi', 'Linux Wi-Fi connection failed: ${retryResult.stderr}');
       return false;
     } catch (e) {
-      log('Error executing Linux Wi-Fi command: $e');
+      _log('_connectToLinuxWifi', 'Error executing Linux Wi-Fi command', error: e);
       return false;
     }
   }
@@ -454,18 +495,18 @@ class ConnectionCubit extends Cubit<ConnectionState> {
       final result = await Process.run('powershell.exe', ['-NoProfile', '-Command', psScript]);
 
       if (result.stdout.toString().isNotEmpty) {
-        log('--- Wi-Fi Connection Log ---\n${result.stdout.toString().trim()}', name: 'WIFI_DEBUG');
+        _log('_connectToWindowsWifi', 'Wi-Fi connection diagnostics: ${result.stdout.toString().trim()}');
       }
 
       if (result.exitCode == 0) {
-        log('Successfully verified connection to Wi-Fi: $ssid');
+        _log('_connectToWindowsWifi', 'Successfully verified connection to Wi-Fi: $ssid');
         return true;
       }
 
-      log('Wi-Fi connection failed. Stderr: \n${result.stderr}');
+      _log('_connectToWindowsWifi', 'Wi-Fi connection failed. Stderr: ${result.stderr}');
       return false;
     } catch (e) {
-      log('Error executing Wi-Fi PowerShell script: $e');
+      _log('_connectToWindowsWifi', 'Error executing Wi-Fi PowerShell script', error: e);
       return false;
     }
   }
@@ -528,7 +569,7 @@ class ConnectionCubit extends Cubit<ConnectionState> {
 
       return HotspotStatus.error;
     } catch (e) {
-      log('Error executing PowerShell: $e');
+      _log('_enableWindowsHotspot', 'Error executing PowerShell', error: e);
       return HotspotStatus.error;
     }
   }
@@ -587,9 +628,10 @@ class ConnectionCubit extends Cubit<ConnectionState> {
         }
       }
     } catch (e) {
-      log('Error getting IP: $e');
+      _log('_getBestIpAddress', 'Error getting IP', error: e);
     }
 
+    _log('_getBestIpAddress', 'Selected best IP: ${ipAddress ?? 'none'}');
     return ipAddress;
   }
 
@@ -619,13 +661,14 @@ class ConnectionCubit extends Cubit<ConnectionState> {
       ),
     );
 
-    await globals.bleInteropService.startAdvertising(qrData, (msg) => log(msg, name: 'BLE'));
+    await globals.bleInteropService.startAdvertising(qrData, (msg) => _log('startAdvertising', msg));
 
     final context = globals.navigatorKey.currentContext;
     if (context != null) {
       DartFunction().openPort(
         context: context,
         onClientConnected: () {
+          _log('openPort.onClientConnected', 'Client connected to host');
           if (isClosed) {
             return;
           }
@@ -638,6 +681,7 @@ class ConnectionCubit extends Cubit<ConnectionState> {
           );
         },
         onClientDisconnected: () {
+          _log('openPort.onClientDisconnected', 'Client disconnected from host');
           if (isClosed) {
             return;
           }

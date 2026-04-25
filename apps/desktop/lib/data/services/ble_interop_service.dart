@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
+import 'dart:developer' as dev;
 import 'package:path/path.dart' as p;
 
 class BleInteropService {
@@ -13,7 +14,12 @@ class BleInteropService {
 
   static const Duration _bridgeConnectTimeout = Duration(seconds: 5);
 
+  void _log(String functionName, String message, {Object? error, StackTrace? stackTrace}) {
+    dev.log(message, name: functionName, error: error, stackTrace: stackTrace);
+  }
+
   String _getExePath(Function(String) log) {
+    _log('_getExePath', 'Resolving BLE bridge executable path');
     final String executableName =
         Platform.isWindows ? 'HotDropBLE.exe' : 'HotDropBLE';
     final String fallbackName =
@@ -33,6 +39,7 @@ class BleInteropService {
     if (File(prodFallbackPath).existsSync()) return prodFallbackPath;
     if (File(devPath).existsSync()) return devPath;
     if (File(devFallbackPath).existsSync()) return devFallbackPath;
+    _log('_getExePath', 'BLE executable could not be resolved');
     throw Exception("BLE Executable not found.");
   }
 
@@ -40,6 +47,8 @@ class BleInteropService {
     if (!Platform.isLinux) {
       return sourcePath;
     }
+
+    _log('_ensureExecutablePath', 'Ensuring Linux executable permissions for $sourcePath');
 
     final sourceFile = File(sourcePath);
     final stat = sourceFile.statSync();
@@ -60,16 +69,19 @@ class BleInteropService {
     }
 
     _stagedExecutablePath = stagedPath;
+    _log('_ensureExecutablePath', 'Staged BLE executable at $stagedPath');
     return stagedPath;
   }
 
   Future<void> _ensureServerRunning(Function(String) log) async {
     if (_serverProcess != null) return;
     try {
+      _log('_ensureServerRunning', 'Starting BLE bridge process');
       final exePath = await _ensureExecutablePath(_getExePath(log));
       _serverProcess = await Process.start(exePath, []);
       await Future.delayed(const Duration(milliseconds: 500));
     } catch (e) {
+      _log('_ensureServerRunning', 'Failed to start BLE bridge process', error: e);
       log("Start Error: $e");
     }
   }
@@ -79,6 +91,7 @@ class BleInteropService {
     Function() onDone,
     Function(String) log,
   ) async {
+    _log('streamAvailableHosts', 'Starting host discovery stream');
     await _ensureServerRunning(log);
     await stopHostScan();
 
@@ -109,6 +122,7 @@ class BleInteropService {
               socket.destroy();
             }
           } catch (e) {
+            _log('streamAvailableHosts', 'Stream parse error', error: e);
             log("Stream parse error: $e");
           }
         },
@@ -128,6 +142,7 @@ class BleInteropService {
           }
 
           log("Stream socket error: $e");
+          _log('streamAvailableHosts', 'Stream socket error', error: e);
           onDone();
           _hostStreamSub = null;
           _hostStreamSocket = null;
@@ -135,12 +150,14 @@ class BleInteropService {
         },
       );
     } catch (e) {
+      _log('streamAvailableHosts', 'Stream connection error', error: e);
       log("Stream connection error: $e");
       onDone();
     }
   }
 
   Future<void> stopHostScan() async {
+    _log('stopHostScan', 'Stopping host discovery stream');
     _hostScanSession++;
 
     try {
@@ -154,6 +171,7 @@ class BleInteropService {
 
   Future<Map<String, dynamic>?> _sendCommand(
       String cmd, Map<String, dynamic>? extras, Function(String) log) async {
+    _log('_sendCommand', 'Sending bridge command: $cmd');
     try {
       final socket = await Socket.connect('127.0.0.1', 8765)
           .timeout(_bridgeConnectTimeout);
@@ -169,9 +187,11 @@ class BleInteropService {
       final response =
           await socket.cast<List<int>>().transform(utf8.decoder).join();
       socket.destroy();
+      _log('_sendCommand', 'Received response for command: $cmd');
 
       return jsonDecode(response);
     } catch (e) {
+      _log('_sendCommand', 'Socket communication error for command: $cmd', error: e);
       log("Socket communication error: $e");
       return null;
     }
@@ -181,6 +201,7 @@ class BleInteropService {
     String hostName,
     Function(String) log,
   ) async {
+    _log('_discoverLatestAddressByName', 'Rediscovering host address for name: $hostName');
     final completer = Completer<String?>();
 
     try {
@@ -246,6 +267,7 @@ class BleInteropService {
         },
       );
     } catch (e) {
+      _log('_discoverLatestAddressByName', 'Host rediscovery error', error: e);
       log('Host rediscovery error: $e');
       return null;
     }
@@ -253,6 +275,7 @@ class BleInteropService {
 
   // --- New Methods for Joiner Role ---
   Future<List<dynamic>> getAvailableHosts(Function(String) log) async {
+    _log('getAvailableHosts', 'Fetching available hosts');
     await _ensureServerRunning(log);
     final res = await _sendCommand("list_hosts", null, log);
     return (res != null && res['status'] == 'success')
@@ -265,11 +288,12 @@ class BleInteropService {
     String hostName,
     Function(String) log,
   ) async {
+    _log('fetchConnectionData', 'Fetching connection data for $hostName at $address');
     await _ensureServerRunning(log);
     await stopHostScan();
 
     final first = await _sendCommand("connect_to", {"address": address}, log);
-    print(first);
+    _log('fetchConnectionData', 'Initial connect_to response: $first');
     if (first != null && first['status'] == 'success' && first['data'] is Map) {
       return Map<String, dynamic>.from(first['data']);
     }
@@ -301,6 +325,7 @@ class BleInteropService {
 
   // --- Methods for Host Role ---
   Future<void> startAdvertising(String qrData, Function(String) log) async {
+    _log('startAdvertising', 'Starting BLE advertising with payload');
     await _ensureServerRunning(log);
     await _sendCommand("start", {"data": qrData}, log);
     _isStarted = true;
@@ -308,11 +333,13 @@ class BleInteropService {
 
   Future<void> stopAdvertising(Function(String) log) async {
     if (!_isStarted) return;
+    _log('stopAdvertising', 'Stopping BLE advertising');
     await _sendCommand("stop", null, log);
     _isStarted = false;
   }
 
   Future<void> dispose() async {
+    _log('dispose', 'Disposing BLE interop service resources');
     await stopHostScan();
     await stopAdvertising((_) {});
     if (_serverProcess != null) {

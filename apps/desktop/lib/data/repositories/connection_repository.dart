@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:developer';
+import 'dart:developer' as dev;
 import 'dart:io';
 
 import 'package:test/logic/constants/globals.dart' as globals;
@@ -15,11 +15,17 @@ class ConnectionRepository {
 
   String? qrData;
 
+  void _log(String functionName, String message, {Object? error, StackTrace? stackTrace}) {
+    dev.log(message, name: functionName, error: error, stackTrace: stackTrace);
+  }
+
   Future<void> startHosting() async {
+    _log('startHosting', 'Starting hosting workflow');
     await _initializeServer(); // Triggers existing setup logic
   }
 
   Future<void> _initializeServer() async {
+    _log('_initializeServer', 'Initializing server for platform ${Platform.operatingSystem}');
     if (Platform.isWindows) {
       // final hasAdmin = await _ensureAdminPrivileges();
       // if (!hasAdmin) {
@@ -31,14 +37,14 @@ class ConnectionRepository {
 
       final hotspotStatus = await _enableWindowsHotspot();
       if (hotspotStatus == HotspotStatus.noInternet) {
-        log("No internet to share. Will attempt to bind to standard Wi-Fi.");
+        _log('_initializeServer', 'No internet to share. Will attempt to bind to standard Wi-Fi.');
       }
 
       await Future.delayed(const Duration(seconds: 2));
     } else if (Platform.isLinux) {
       final hotspotStatus = await _enableLinuxHotspot();
       if (hotspotStatus != HotspotStatus.success) {
-        log("Could not create Linux Hotspot. Falling back to existing Wi-Fi network.");
+        _log('_initializeServer', 'Could not create Linux hotspot. Falling back to existing Wi-Fi network.');
       }
 
       await Future.delayed(const Duration(seconds: 2));
@@ -51,7 +57,7 @@ class ConnectionRepository {
     try {
       final checkNmcli = await Process.run('which', ['nmcli']);
       if (checkNmcli.exitCode != 0) {
-        log("nmcli is not installed. Cannot manage hotspot.");
+        _log('_enableLinuxHotspot', 'nmcli is not installed. Cannot manage hotspot.');
         return HotspotStatus.error;
       }
 
@@ -59,7 +65,7 @@ class ConnectionRepository {
       String ssid = "HotDrop_$safeHostname";
       String password = "HotDrop${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}";
 
-      log("Executing nmcli to create hotspot...");
+      _log('_enableLinuxHotspot', 'Executing nmcli to create hotspot');
       final result = await Process.run('nmcli', ['device', 'wifi', 'hotspot', 'ssid', ssid, 'password', password]);
 
       if (result.exitCode == 0) {
@@ -69,14 +75,14 @@ class ConnectionRepository {
         globals.isHotspotActive = true;
         globals.activeHotspotSsid = ssid;
 
-        log("Linux Hotspot started successfully: SSID: $ssid");
+        _log('_enableLinuxHotspot', 'Linux hotspot started successfully: SSID=$ssid');
         return HotspotStatus.success;
       } else {
-        log("Failed to start Linux hotspot: ${result.stderr}");
+        _log('_enableLinuxHotspot', 'Failed to start Linux hotspot: ${result.stderr}');
         return HotspotStatus.error;
       }
     } catch (e) {
-      log("Error executing nmcli: $e");
+      _log('_enableLinuxHotspot', 'Error executing nmcli', error: e);
       return HotspotStatus.error;
     }
   }
@@ -114,6 +120,7 @@ class ConnectionRepository {
     ''';
 
     try {
+      _log('_enableWindowsHotspot', 'Attempting to enable Windows hotspot');
       final result = await Process.run('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', psScript]);
 
       final stdoutStr = result.stdout.toString();
@@ -124,17 +131,20 @@ class ConnectionRepository {
       if (passMatch != null) _hotspotPassword = passMatch.group(1)?.trim();
 
       if (result.stderr.toString().contains("NO_INTERNET")) {
+        _log('_enableWindowsHotspot', 'No internet connection available for tethering');
         return HotspotStatus.noInternet;
       }
 
       if (result.exitCode == 0) {
         globals.isHotspotActive = true;
         globals.activeHotspotSsid = _hotspotSsid;
+        _log('_enableWindowsHotspot', 'Windows hotspot enabled successfully');
         return HotspotStatus.success;
       }
+      _log('_enableWindowsHotspot', 'Windows hotspot command returned non-zero exit code ${result.exitCode}');
       return HotspotStatus.error;
     } catch (e) {
-      log("Error executing PowerShell: $e");
+      _log('_enableWindowsHotspot', 'Error executing PowerShell', error: e);
       return HotspotStatus.error;
     }
   }
@@ -183,12 +193,14 @@ class ConnectionRepository {
         }
       }
     } catch (e) {
-      log("Error getting IP: $e");
+      _log('_getBestIpAddress', 'Error getting IP', error: e);
     }
+    _log('_getBestIpAddress', 'Selected IP: ${ipAddress ?? 'none'}');
     return ipAddress;
   }
 
   Future<void> _getHostInfo() async {
+    _log('_getHostInfo', 'Gathering host info and creating QR payload');
     String? ipAddress = await _getBestIpAddress();
 
     globals.currentServerIp = ipAddress;
@@ -203,10 +215,12 @@ class ConnectionRepository {
     });
 
     if (qrData != null) {
-      await globals.bleInteropService.startAdvertising(qrData!, (msg) => log(msg, name: "BLE"));
+      await globals.bleInteropService.startAdvertising(qrData!, (msg) => dev.log(msg, name: 'startAdvertising'));
+      _log('_getHostInfo', 'BLE advertising started with generated QR payload');
     }
 
     DartFunction().openPort(context: globals.navigatorKey.currentContext!);
+    _log('_getHostInfo', 'TCP listener opened for incoming peer connection');
   }
 }
 

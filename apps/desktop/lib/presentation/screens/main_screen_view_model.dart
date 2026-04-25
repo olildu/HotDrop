@@ -44,7 +44,8 @@ class MainScreenViewModel {
       statusText: _statusTextFor(state),
       hasConnection: state.selectedRole != ConnectionRole.none,
       isConnected: isConnected,
-      showTransferHub: state.selectedRole == ConnectionRole.host && state.hostClientConnected,
+      showTransferHub: (state.selectedRole == ConnectionRole.host && state.hostClientConnected) || 
+                 (state.selectedRole == ConnectionRole.join && !state.isProcessing),
       isProcessing: state.isProcessing,
       isAdminError: state.isAdminError,
       isJoinMode: state.selectedRole == ConnectionRole.join,

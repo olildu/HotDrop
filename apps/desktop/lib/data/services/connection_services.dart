@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:developer' as dev;
 import 'package:flutter/material.dart';
 
 import 'package:test/logic/constants/globals.dart' as globals;
@@ -8,6 +9,10 @@ import 'data_services.dart';
 Socket? socket;
 ServerSocket? server;
 
+void _logConnection(String functionName, String message, {Object? error, StackTrace? stackTrace}) {
+  dev.log(message, name: functionName, error: error, stackTrace: stackTrace);
+}
+
 class DartFunction {
   Future<void> openPort({
     BuildContext? context,
@@ -15,6 +20,7 @@ class DartFunction {
     VoidCallback? onClientDisconnected,
   }) async {
     const int port = 42069;
+    _logConnection('openPort', 'Opening TCP server on port $port');
     try {
       // FIX: Close any existing server before starting a new one
       await server?.close();
@@ -22,10 +28,10 @@ class DartFunction {
 
       // FIX: Add shared: true
       server = await ServerSocket.bind(InternetAddress.anyIPv4, port, shared: true);
-      print('Server listening on port $port');
+      _logConnection('openPort', 'Server listening on port $port');
 
       server?.listen((Socket client) {
-        print('Connection from ${client.remoteAddress.address}:${client.remotePort}');
+        _logConnection('openPort', 'Client connected from ${client.remoteAddress.address}:${client.remotePort}');
         client.setOption(SocketOption.tcpNoDelay, true);
 
         socket = client;
@@ -44,11 +50,11 @@ class DartFunction {
             }
           },
           onError: (error) {
-            print('Error: $error');
+            _logConnection('openPort', 'Socket stream error', error: error);
             client.close();
           },
           onDone: () {
-            print('Client disconnected');
+            _logConnection('openPort', 'Client disconnected');
             socket = null;
             onClientDisconnected?.call();
             client.close();
@@ -56,12 +62,12 @@ class DartFunction {
         );
       });
     } catch (e) {
-      print('Error opening port: $e');
+      _logConnection('openPort', 'Error opening port', error: e);
     }
   }
 
   void closePort() {
-    print("Closing port manually");
+    _logConnection('closePort', 'Closing server and socket manually');
     socket?.close();
     server?.close();
     socket = null;
@@ -73,6 +79,7 @@ class DartFunction {
   }
 
   Future<void> connectToHost(String ip, {BuildContext? context}) async {
+    _logConnection('connectToHost', 'Connecting to host at $ip:42069');
     try {
       socket = await Socket.connect(ip, 42069, timeout: const Duration(seconds: 10));
       socket!.setOption(SocketOption.tcpNoDelay, true);
@@ -87,7 +94,9 @@ class DartFunction {
           }
         }
       });
+      _logConnection('connectToHost', 'Connected to host and listener attached');
     } catch (e) {
+      _logConnection('connectToHost', 'Failed to connect to host', error: e);
       rethrow;
     }
   }
@@ -97,15 +106,15 @@ class DartFunction {
       if (message.isEmpty) return false;
 
       if (socket == null) {
-        print('Error: No active connection');
+        _logConnection('sendMessage', 'No active connection available');
         return false;
       }
 
       socket!.write('$message\n');
-      print('Message sent: $message');
+      _logConnection('sendMessage', 'Message sent (${message.length} chars)');
       return true;
     } catch (e) {
-      print('Error sending message: $e');
+      _logConnection('sendMessage', 'Error sending message', error: e);
       return false;
     }
   }
@@ -118,7 +127,7 @@ class DartFunction {
 void shutdownHotspotSync() {
   if (!globals.isHotspotActive) return;
 
-  print("Shutting down Mobile Hotspot...");
+  _logConnection('shutdownHotspotSync', 'Shutting down mobile hotspot');
 
   if (Platform.isWindows) {
     const psScript = '''
@@ -150,7 +159,7 @@ void shutdownHotspotSync() {
 }
 
 Future<void> hardCleanupOnStartup() async {
-  print("Performing hard cleanup on startup...");
+  _logConnection('hardCleanupOnStartup', 'Performing hard cleanup on startup');
   try {
     if (Platform.isWindows) {
       Process.runSync('taskkill', ['/F', '/IM', 'HotDropBLE.exe', '/T']);
@@ -190,7 +199,7 @@ Future<void> hardCleanupOnStartup() async {
       }
     }
   } catch (e) {
-    print("Startup cleanup encountered an error (safe to ignore): $e");
+    _logConnection('hardCleanupOnStartup', 'Startup cleanup encountered an error (safe to ignore)', error: e);
   }
 }
 
