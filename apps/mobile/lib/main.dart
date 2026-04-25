@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:test_mobile/logic/cubits/connection/connection_cubit.dart';
 import 'package:test_mobile/logic/cubits/hotdrop_cubit.dart';
+import 'package:test_mobile/logic/cubits/popup_cubit.dart';
 import 'package:test_mobile/logic/cubits/session/session_cubit.dart';
 import 'package:test_mobile/data/constants/globals.dart';
 import 'package:test_mobile/logic/cubits/file_detail_cubit.dart';
@@ -13,6 +14,7 @@ import 'package:test_mobile/data/repositories/file_repository.dart';
 import 'package:test_mobile/logic/di/injection_container.dart' as di;
 import 'package:test_mobile/presentation/screens/main_screen.dart';
 import 'package:test_mobile/data/services/connection_services.dart';
+import 'package:test_mobile/presentation/widgets/transfer_popup_overlay.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,6 +33,7 @@ void main() async {
           create: (context) => ConnectionCubit(di.sl<ConnectionRepository>()),
         ),
         BlocProvider(create: (context) => di.sl<HotDropCubit>()),
+        BlocProvider(create: (context) => di.sl<PopupCubit>()),
       ],
       child: const MyApp(),
     ),
@@ -51,6 +54,14 @@ class MyApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         themeMode: ThemeMode.dark,
         theme: AppTheme.darkTheme,
+        builder: (context, child) {
+          return Stack(
+            children: [
+              if (child != null) child,
+              const TransferPopupOverlay(),
+            ],
+          );
+        },
         home: const MainScreen(),
       ),
     );

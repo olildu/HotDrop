@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:developer'; // FIX: Add for log
+import 'dart:developer' as dev;
 import 'package:test_mobile/data/constants/globals.dart'; // FIX: Add for socket/connectedToPort
 import 'package:test_mobile/data/constants/globals.dart' as globals;
 import 'package:test_mobile/data/services/connection_services.dart';
@@ -11,10 +11,12 @@ class ConnectionRepository {
   final ClientServices _clientService = ClientServices();
 
   Future<Map<String, String>?> hostSession() async {
+    dev.log('Hosting session...', name: 'hostSession');
     return await _hostService.startHosting();
   }
 
   Future<bool> joinSession(String rawCredentials) async {
+    dev.log('Joining session...', name: 'joinSession');
     try {
       final creds = jsonDecode(rawCredentials);
       if (creds['isDesktop'] == true) {
@@ -27,11 +29,13 @@ class ConnectionRepository {
         );
       }
     } catch (e) {
+      dev.log('Failed to join session', name: 'joinSession', error: e);
       return false;
     }
   }
 
   void performCleanup() {
+    dev.log('Performing connection cleanup', name: 'performCleanup');
     try {
       BlePeripheralService().stopAdvertising();
       if (globals.connectedToPort == false) {
@@ -44,7 +48,7 @@ class ConnectionRepository {
         connectedToPort = false;
       }
     } catch (e) {
-      log("Cleanup error: $e");
+      dev.log("Cleanup error", name: 'performCleanup', error: e);
     }
   }
 }

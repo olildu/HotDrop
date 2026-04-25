@@ -96,8 +96,8 @@ class FileHostingService {
     String? fallback;
 
     for (var interface in interfaces) {
-      print(interface.name);
-      print(interface.addresses);
+      dev.log(interface.name, name: "FileHostingService");
+      dev.log(interface.addresses.toString(), name: "FileHostingService");
       for (var addr in interface.addresses) {
         if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
           final ip = addr.address;

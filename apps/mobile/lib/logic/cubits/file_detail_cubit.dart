@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as dev;
 import 'dart:io';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -23,22 +24,27 @@ class FileDetailCubit extends Cubit<FileDetailState> {
   StreamSubscription? _subscription;
 
   FileDetailCubit(this._fileRepository) : super(FileDetailState()) {
+    dev.log('Initializing FileDetailCubit', name: 'FileDetailCubit');
     _subscription = _fileRepository.fileUpdates.listen((file) {
+      dev.log('Received file update: ${file.name}', name: '_subscription');
       emit(state.copyWith(files: List<FileModel>.from(state.files)..add(file)));
     });
   }
 
   Future<void> loadFileDetails() async {
+    dev.log('Loading file details', name: 'loadFileDetails');
     final files = await _fileRepository.getFileHistory();
     emit(state.copyWith(files: files));
   }
 
   void addFile(FileModel file) {
+    dev.log('Adding file: ${file.name}', name: 'addFile');
     emit(state.copyWith(files: List<FileModel>.from(state.files)..add(file)));
     FileStorageService().saveFileDetail(file);
   }
 
   void setHistoryFilter(FileHistoryFilter filter) {
+    dev.log('Setting history filter to $filter', name: 'setHistoryFilter');
     if (state.selectedFilter == filter) return;
     emit(state.copyWith(selectedFilter: filter));
   }
@@ -56,6 +62,7 @@ class FileDetailCubit extends Cubit<FileDetailState> {
   }
 
   Future<void> openFile(FileModel file) async {
+    dev.log('Opening file: ${file.name}', name: 'openFile');
     final path = file.path;
     if (path == null) return;
     if (await File(path).exists()) {
@@ -88,6 +95,7 @@ class FileDetailCubit extends Cubit<FileDetailState> {
 
   @override
   Future<void> close() {
+    dev.log('Closing FileDetailCubit', name: 'close');
     _subscription?.cancel();
     return super.close();
   }

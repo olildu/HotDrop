@@ -18,8 +18,12 @@ import 'package:device_info_plus/device_info_plus.dart';
 // REPOSITORY AND BLOC IMPORTS
 import 'package:test_mobile/logic/di/injection_container.dart' as di;
 import 'package:test_mobile/logic/cubits/session/session_cubit.dart';
-import 'package:test_mobile/data/repositories/chat_repository.dart';
 import 'package:test_mobile/data/repositories/file_repository.dart';
+import 'package:test_mobile/logic/cubits/popup_cubit.dart';
+
+void _logConnection(String functionName, String message, {Object? error, StackTrace? stackTrace}) {
+  log(message, name: functionName, error: error, stackTrace: stackTrace);
+}
 
 class AndroidFunction {
   static const platform = MethodChannel('com.example.wifi_direct/channel');
@@ -38,7 +42,7 @@ class AndroidFunction {
       if (creds != null) {
         String ssid = creds['ssid'];
         String password = creds['password'];
-        log("Hotspot Started: $ssid", name: "Host");
+        _logConnection('startHosting', "Hotspot Started: $ssid");
 
         String hostIp = await FileHostingService().getLocalIpAddress();
 
@@ -50,7 +54,7 @@ class AndroidFunction {
         return connectionData;
       }
     } on PlatformException catch (e) {
-      log("Failed to start hotspot: '${e.message}'.", name: "Host");
+      _logConnection('startHosting', "Failed to start hotspot: '${e.message}'.", error: e);
     }
     return null;
   }
@@ -66,7 +70,7 @@ class AndroidFunction {
 class ClientServices {
   Future<bool> connectToHostHotspot(String ssid, String password, String hostIp, {bool isAuto = false}) async {
     try {
-      log("Attempting to connect to Hotspot: $ssid (Auto: $isAuto)", name: "Client");
+      _logConnection('connectToHostHotspot', "Attempting to connect to Hotspot: $ssid (Auto: $isAuto)");
 
       // 1. Attempt programmatic connection
       bool connected = await WiFiForIoTPlugin.connect(
@@ -78,7 +82,7 @@ class ClientServices {
       );
 
       if (connected) {
-        log("Successfully connected to Hotspot Wi-Fi!", name: "Client");
+        _logConnection('connectToHostHotspot', "Successfully connected to Hotspot Wi-Fi!");
         await WiFiForIoTPlugin.forceWifiUsage(true);
         // Wait for DHCP - shorter for auto
         await Future.delayed(Duration(seconds: isAuto ? 2 : 4));
@@ -87,12 +91,12 @@ class ClientServices {
       } else {
         // FAIL FAST on Auto-reconnect to avoid blocking the app
         if (isAuto) {
-          log("Auto-reconnect Wi-Fi failed. Aborting to prevent UI lag.", name: "Client");
+          _logConnection('connectToHostHotspot', "Auto-reconnect Wi-Fi failed. Aborting to prevent UI lag.");
           return false;
         }
 
         // --- MANUAL FALLBACK (Only for user-initiated) ---
-        log("Triggering manual fallback for user-initiated connection.", name: "Client");
+        _logConnection('connectToHostHotspot', "Triggering manual fallback for user-initiated connection.");
         if (navigatorKey.currentContext != null) {
           await Clipboard.setData(ClipboardData(text: password));
           ScaffoldMessenger.of(navigatorKey.currentContext!).showSnackBar(
@@ -112,7 +116,7 @@ class ClientServices {
         return false;
       }
     } catch (e) {
-      log("Error connecting to Wi-Fi: $e", name: "Client");
+      _logConnection('connectToHostHotspot', "Error connecting to Wi-Fi", error: e);
       return false;
     }
   }
@@ -131,31 +135,33 @@ class ClientServices {
         String? gatewayIp = await NetworkInfo().getWifiGatewayIP();
         String targetIp = (gatewayIp != null && gatewayIp != "0.0.0.0") ? gatewayIp : hostIp;
 
-        log("Socket Attempt $retryCount: Connecting to $targetIp:42069...", name: "Client");
+        _logConnection('connectToHostSocket', "Socket Attempt $retryCount: Connecting to $targetIp:42069...");
 
         socket = await Socket.connect(targetIp, 42069, timeout: const Duration(seconds: 3));
         connectedToPort = true;
 
         di.sl<SessionCubit>().updateConnectionStatus(true);
-        log("Connected to Host Socket!", name: "Client");
+        _logConnection('connectToHostSocket', "Connected to Host Socket!");
 
         socket!.listen(
           (data) {
             final message = String.fromCharCodes(data).trim();
-            ReceivedDataParser(di.sl<ChatRepository>(), di.sl<FileRepository>()).parseData(message);
+            ReceivedDataParser(di.sl<FileRepository>()).parseData(message);
           },
           onError: (e) {
             connectedToPort = false;
             di.sl<SessionCubit>().updateConnectionStatus(false);
+            di.sl<PopupCubit>().hide();
           },
           onDone: () {
             connectedToPort = false;
             di.sl<SessionCubit>().updateConnectionStatus(false);
+            di.sl<PopupCubit>().hide();
           },
         );
         return true;
       } catch (e) {
-        log('Socket attempt $retryCount failed: $e', name: "Client");
+        _logConnection('connectToHostSocket', 'Socket attempt $retryCount failed', error: e);
       }
     }
     return false;
@@ -169,12 +175,12 @@ class ClientServices {
       String? hostIp = prefs.getString('last_host_ip');
 
       if (ssid != null && password != null && hostIp != null) {
-        log("Previous session found. Attempting background reconnect...", name: "Client");
+        _logConnection('tryAutoReconnect', "Previous session found. Attempting background reconnect...");
         // isAuto: true triggers the high-speed logic
         return await connectToHostHotspot(ssid, password, hostIp, isAuto: true);
       }
     } catch (e) {
-      log("Auto-reconnect aborted: $e", name: "Client");
+      _logConnection('tryAutoReconnect', "Auto-reconnect aborted", error: e);
     }
     return false;
   }
@@ -190,10 +196,10 @@ class DartFunction {
     while (retryCount < 5) {
       try {
         _serverSocket = await ServerSocket.bind(InternetAddress.anyIPv4, port, shared: true);
-        log("TCP Server listening on $hostIp:$port", name: "Server");
+        _logConnection('startServer', "TCP Server listening on $hostIp:$port");
 
         _serverSocket!.listen((client) {
-          log("New connection from ${client.remoteAddress.address}", name: "Server");
+          _logConnection('startServer', "New connection from ${client.remoteAddress.address}");
           handleClient(client);
         });
         return;
@@ -223,20 +229,22 @@ class DartFunction {
     socket!.listen(
       (data) {
         final message = String.fromCharCodes(data).trim();
-        log('Received: $message', name: "Server");
+        _logConnection('handleClient', 'Received: $message');
 
         // ---> FIX: Pass Repositories to Parser
-        ReceivedDataParser(di.sl<ChatRepository>(), di.sl<FileRepository>()).parseData(message);
+        ReceivedDataParser(di.sl<FileRepository>()).parseData(message);
       },
       onError: (e) {
-        log("Socket Error: $e", name: "Server");
+        _logConnection('handleClient', "Socket Error", error: e);
         connectedToPort = false;
         di.sl<SessionCubit>().updateConnectionStatus(false);
+        di.sl<PopupCubit>().hide();
       },
       onDone: () {
-        log("Client disconnected", name: "Server");
+        _logConnection('handleClient', "Client disconnected");
         connectedToPort = false;
         di.sl<SessionCubit>().updateConnectionStatus(false);
+        di.sl<PopupCubit>().hide();
       },
     );
   }
@@ -252,9 +260,9 @@ class DartFunction {
     if (socket != null) {
       try {
         socket!.write('$message\n');
-        log("Sent: $message", name: "Socket");
+        _logConnection('sendDataToSocket', "Sent: $message");
       } catch (e) {
-        log("Send Error: $e", name: "Socket");
+        _logConnection('sendDataToSocket', "Send Error", error: e);
       }
     }
   }

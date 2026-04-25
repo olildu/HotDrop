@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as dev;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:test_mobile/data/repositories/connection_repository.dart';
@@ -53,9 +54,12 @@ class ConnectionCubit extends Cubit<ConnectionCubitState> {
   static const String _serviceUuid = "0000ABCD-0000-1000-8000-00805F9B34FB";
   static const String _charUuid = "0000FFFE-0000-1000-8000-00805F9B34FB";
 
-  ConnectionCubit(this._repository) : super(ConnectionCubitState(status: ConnectionStatus.idle));
+  ConnectionCubit(this._repository) : super(ConnectionCubitState(status: ConnectionStatus.idle)) {
+    dev.log('Initializing ConnectionCubit', name: 'ConnectionCubit');
+  }
 
   Future<void> initializeScreen({required bool isReceiving}) {
+    dev.log('Initializing screen for ${isReceiving ? "receiving" : "sending"}', name: 'initializeScreen');
     return isReceiving ? startHosting() : startScanning();
   }
 
@@ -82,6 +86,7 @@ class ConnectionCubit extends Cubit<ConnectionCubitState> {
 
   /// Starts the Hotspot and begins BLE Advertising
   Future<void> startHosting() async {
+    dev.log('Starting hotspot and BLE advertising', name: 'startHosting');
     stopBleOperations();
     emit(state.copyWith(status: ConnectionStatus.hosting, discoveredDevices: []));
 
@@ -95,6 +100,7 @@ class ConnectionCubit extends Cubit<ConnectionCubitState> {
 
   /// Initiates a BLE Scan for nearby HotDrop hosts
   Future<void> startScanning() async {
+    dev.log('Starting BLE scan for nearby hosts', name: 'startScanning');
     stopBleOperations();
     emit(state.copyWith(status: ConnectionStatus.scanning, discoveredDevices: []));
 
@@ -134,6 +140,7 @@ class ConnectionCubit extends Cubit<ConnectionCubitState> {
 
   /// Connects to a found BLE peer and reads their Hotspot credentials
   Future<void> connectToDiscoveredDevice(DiscoveredDevice discovered) async {
+    dev.log('Connecting to discovered device: ${discovered.name} (${discovered.id})', name: 'connectToDiscoveredDevice');
     stopBleOperations();
     emit(state.copyWith(status: ConnectionStatus.connecting));
 
@@ -164,6 +171,7 @@ class ConnectionCubit extends Cubit<ConnectionCubitState> {
 
   /// Joins the actual Wi-Fi session using credentials from QR or BLE
   Future<void> joinSession(String rawData) async {
+    dev.log('Joining session using raw data', name: 'joinSession');
     emit(state.copyWith(status: ConnectionStatus.connecting));
     final success = await _repository.joinSession(rawData);
     if (success) {
@@ -174,6 +182,7 @@ class ConnectionCubit extends Cubit<ConnectionCubitState> {
   }
 
   void stopBleOperations() {
+    dev.log('Stopping BLE operations', name: 'stopBleOperations');
     _scanSubscription?.cancel();
     _scanSubscription = null;
     _repository.performCleanup();
@@ -182,6 +191,7 @@ class ConnectionCubit extends Cubit<ConnectionCubitState> {
 
   @override
   Future<void> close() {
+    dev.log('Closing ConnectionCubit', name: 'close');
     stopBleOperations();
     return super.close();
   }

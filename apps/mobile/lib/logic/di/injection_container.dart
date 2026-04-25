@@ -1,5 +1,6 @@
 import 'package:get_it/get_it.dart';
 import 'package:test_mobile/logic/cubits/hotdrop_cubit.dart';
+import 'package:test_mobile/logic/cubits/popup_cubit.dart';
 import 'package:test_mobile/logic/cubits/message_cubit.dart';
 import 'package:test_mobile/logic/cubits/session/session_cubit.dart';
 import 'package:test_mobile/data/repositories/chat_repository.dart';
@@ -23,5 +24,6 @@ Future<void> init() async {
   sl.registerLazySingleton(() => ContactRepository());
   sl.registerLazySingleton(() => SessionCubit(sl(), sl()));
   sl.registerLazySingleton(() => HotDropCubit(sl<FileHostingService>()));
+  sl.registerLazySingleton(() => PopupCubit());
   sl.registerLazySingleton(() => MessageCubit(sl<ChatRepository>()));
 }

@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:developer';
+import 'dart:developer' as dev;
 import 'package:flutter/services.dart';
 
 class BlePeripheralService {
@@ -16,9 +16,9 @@ class BlePeripheralService {
       
       // Pass the payload string to the native side
       await _channel.invokeMethod('startAdvertising', {'payload': payload});
-      log("BLE Native Host Started with payload: $payload", name: "BLE-Native");
+      dev.log("BLE Native Host Started with payload: $payload", name: "startAdvertising");
     } on PlatformException catch (e) {
-      log("BLE Native Host Error: '${e.message}'.", name: "BLE-Native");
+      dev.log("BLE Native Host Error: '${e.message}'.", name: "startAdvertising", error: e);
     }
   }
 
@@ -27,18 +27,18 @@ class BlePeripheralService {
     try {
       final String payload = jsonEncode(connectionData);
       await _channel.invokeMethod('updatePayload', {'payload': payload});
-      log("BLE Native Payload Updated: $payload", name: "BLE-Native");
+      dev.log("BLE Native Payload Updated: $payload", name: "updatePayload");
     } on PlatformException catch (e) {
-      log("BLE Native Update Error: '${e.message}'.", name: "BLE-Native");
+      dev.log("BLE Native Update Error: '${e.message}'.", name: "updatePayload", error: e);
     }
   }
 
   Future<void> stopAdvertising() async {
     try {
       await _channel.invokeMethod('stopAdvertising');
-      log("BLE Native Host Stopped", name: "BLE-Native");
+      dev.log("BLE Native Host Stopped", name: "stopAdvertising");
     } on PlatformException catch (e) {
-      log("Failed to stop advertising: '${e.message}'.", name: "BLE-Native");
+      dev.log("Failed to stop advertising: '${e.message}'.", name: "stopAdvertising", error: e);
     }
   }
 }
