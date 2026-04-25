@@ -131,27 +131,32 @@ class _MessagingScreenState extends State<MessagingScreen> {
 
   Widget _buildInputArea(bool isConnected) {
     return Container(
-      padding: EdgeInsets.fromLTRB(24.w, 12.h, 24.w, 32.h),
+      padding: EdgeInsets.fromLTRB(10.w, 12.h, 10.w, 12.h),
       decoration: const BoxDecoration(color: AppColors.surface),
       child: Row(
         children: [
           Expanded(
             child: Container(
+              height: 60.h,
               padding: EdgeInsets.symmetric(horizontal: 20.w),
               decoration: BoxDecoration(
                 color: AppColors.surfaceContainerHigh,
                 borderRadius: BorderRadius.circular(28.r),
               ),
-              child: TextField(
-                controller: _messageController,
-                enabled: isConnected,
-                style: const TextStyle(color: AppColors.onSurface),
-                decoration: InputDecoration(
-                  hintText: isConnected ? "Enter kinetic pulse..." : "Waiting for connection...",
-                  border: InputBorder.none,
-                  hintStyle: TextStyle(color: AppColors.onSurfaceVariant.withOpacity(0.5)),
+              child: Center(
+                child: TextField(
+                  controller: _messageController,
+                  enabled: isConnected,
+                  style: const TextStyle(color: AppColors.onSurface),
+                  decoration: InputDecoration(
+                    hintText: isConnected ? "Enter kinetic pulse..." : "Waiting for connection...",
+                    border: InputBorder.none,
+                    filled: false,
+                    focusedBorder: InputBorder.none,
+                    hintStyle: TextStyle(color: AppColors.onSurfaceVariant.withOpacity(0.5)),
+                  ),
+                  onSubmitted: (_) => _sendMessage(),
                 ),
-                onSubmitted: (_) => _sendMessage(),
               ),
             ),
           ),

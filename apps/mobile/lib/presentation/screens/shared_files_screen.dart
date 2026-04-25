@@ -27,12 +27,6 @@ class _SharedFilesScreenState extends State<SharedFilesScreen> {
         backgroundColor: colorScheme.surface,
         elevation: 0,
         leading: const BackButton(color: AppColors.onSurface),
-        actions: [
-          Padding(
-            padding: EdgeInsets.only(right: 20.w),
-            child: Icon(Icons.account_circle_outlined, color: colorScheme.onSurface, size: 28.sp),
-          ),
-        ],
       ),
       body: BlocBuilder<FileDetailCubit, FileDetailState>(
         builder: (context, state) {

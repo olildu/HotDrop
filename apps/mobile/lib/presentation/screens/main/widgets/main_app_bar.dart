@@ -12,13 +12,6 @@ class MainAppBar extends StatelessWidget implements PreferredSizeWidget {
       backgroundColor: colorScheme.surface,
       elevation: 0,
       centerTitle: true,
-      leading: Padding(
-        padding: EdgeInsets.only(left: 20.w),
-        child: CircleAvatar(
-          backgroundColor: colorScheme.surfaceContainerHighest,
-          child: Icon(Icons.person, color: colorScheme.onSurfaceVariant),
-        ),
-      ),
       title: Text(
         "HOTDROP",
         style: GoogleFonts.inter(
@@ -28,12 +21,6 @@ class MainAppBar extends StatelessWidget implements PreferredSizeWidget {
           color: colorScheme.onSurface,
         ),
       ),
-      actions: [
-        Padding(
-          padding: EdgeInsets.only(right: 20.w),
-          child: Icon(Icons.settings, color: colorScheme.onSurfaceVariant),
-        ),
-      ],
     );
   }
 
