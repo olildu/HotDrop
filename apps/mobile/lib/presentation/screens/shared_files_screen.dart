@@ -16,6 +16,20 @@ class SharedFilesScreen extends StatefulWidget {
 }
 
 class _SharedFilesScreenState extends State<SharedFilesScreen> {
+  late TextEditingController _searchController;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController(text: context.read<FileDetailCubit>().state.searchQuery);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -54,6 +68,10 @@ class _SharedFilesScreenState extends State<SharedFilesScreen> {
                 ),
                 Gap(32.h),
 
+                // Search Bar
+                _buildSearchBar(context),
+                Gap(24.h),
+
                 // Pill Tabs
                 _buildTabs(context, state.selectedFilter),
                 Gap(32.h),
@@ -80,6 +98,34 @@ class _SharedFilesScreenState extends State<SharedFilesScreen> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildSearchBar(BuildContext context) {
+    return Container(
+      height: 60.h,
+      padding: EdgeInsets.symmetric(horizontal: 20.w),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(24.r),
+      ),
+      child: Center(
+        child: TextField(
+          controller: _searchController,
+          style: const TextStyle(color: AppColors.onSurface),
+          decoration: InputDecoration(
+            hintText: "Search kinetic transfers...",
+            border: InputBorder.none,
+            filled: false,
+            focusedBorder: InputBorder.none,
+            hintStyle: TextStyle(color: AppColors.onSurfaceVariant.withValues(alpha: 0.5)),
+            icon: Icon(Icons.search_rounded, color: AppColors.onSurfaceVariant),
+          ),
+          onChanged: (query) {
+            context.read<FileDetailCubit>().setSearchQuery(query);
+          },
+        ),
       ),
     );
   }

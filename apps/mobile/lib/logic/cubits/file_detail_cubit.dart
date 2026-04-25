@@ -13,10 +13,24 @@ enum FileHistoryFilter { all, sent, received }
 class FileDetailState {
   final List<FileModel> files;
   final FileHistoryFilter selectedFilter;
+  final String searchQuery;
 
-  FileDetailState({this.files = const [], this.selectedFilter = FileHistoryFilter.all});
+  FileDetailState({
+    this.files = const [],
+    this.selectedFilter = FileHistoryFilter.all,
+    this.searchQuery = '',
+  });
 
-  FileDetailState copyWith({List<FileModel>? files, FileHistoryFilter? selectedFilter}) => FileDetailState(files: files ?? this.files, selectedFilter: selectedFilter ?? this.selectedFilter);
+  FileDetailState copyWith({
+    List<FileModel>? files,
+    FileHistoryFilter? selectedFilter,
+    String? searchQuery,
+  }) =>
+      FileDetailState(
+        files: files ?? this.files,
+        selectedFilter: selectedFilter ?? this.selectedFilter,
+        searchQuery: searchQuery ?? this.searchQuery,
+      );
 }
 
 class FileDetailCubit extends Cubit<FileDetailState> {
@@ -49,16 +63,31 @@ class FileDetailCubit extends Cubit<FileDetailState> {
     emit(state.copyWith(selectedFilter: filter));
   }
 
+  void setSearchQuery(String query) {
+    dev.log('Setting search query to "$query"', name: 'setSearchQuery');
+    emit(state.copyWith(searchQuery: query));
+  }
+
   List<FileModel> getFilteredFiles() {
-    final files = state.files.reversed.toList();
+    var files = state.files.reversed.toList();
+
     switch (state.selectedFilter) {
       case FileHistoryFilter.sent:
-        return files.where((f) => f.isSent).toList();
+        files = files.where((f) => f.isSent).toList();
+        break;
       case FileHistoryFilter.received:
-        return files.where((f) => !f.isSent).toList();
+        files = files.where((f) => !f.isSent).toList();
+        break;
       case FileHistoryFilter.all:
-        return files;
+        break;
     }
+
+    final query = state.searchQuery.trim().toLowerCase();
+    if (query.isNotEmpty) {
+      files = files.where((f) => f.name.toLowerCase().contains(query)).toList();
+    }
+
+    return files;
   }
 
   Future<void> openFile(FileModel file) async {
