@@ -7,8 +7,9 @@ import 'package:test/presentation/theme/app_colors.dart';
 
 class MainScreenTopBar extends StatelessWidget {
   final MainScreenViewModel viewModel;
+  final ValueChanged<String> onSearchChanged;
 
-  const MainScreenTopBar({super.key, required this.viewModel});
+  const MainScreenTopBar({super.key, required this.viewModel, required this.onSearchChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -48,9 +49,10 @@ class MainScreenTopBar extends StatelessWidget {
                 Gap(10.w),
                 Expanded(
                   child: TextField(
+                    onChanged: onSearchChanged,
                     style: TextStyle(color: Colors.white, fontSize: 12.sp),
                     decoration: InputDecoration(
-                      hintText: 'Search protocol...',
+                      hintText: 'Search files...',
                       hintStyle: TextStyle(color: Colors.grey, fontSize: 12.sp),
                       border: InputBorder.none,
                       enabledBorder: InputBorder.none,

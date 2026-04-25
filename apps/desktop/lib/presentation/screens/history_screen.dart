@@ -18,6 +18,13 @@ class HistoryScreen extends StatefulWidget {
 
 class _HistoryScreenState extends State<HistoryScreen> {
   HistoryFilter _selectedFilter = HistoryFilter.all;
+  String _searchQuery = '';
+
+  void _onSearchChanged(String query) {
+    setState(() {
+      _searchQuery = query.trim().toLowerCase();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,10 +42,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
         builder: (context, state) {
           final allFiles = state.completedTransfers;
           final filteredFiles = allFiles.where((file) {
-            if (_selectedFilter == HistoryFilter.sent) return file.isSent;
-            if (_selectedFilter == HistoryFilter.received) return !file.isSent;
-            return true;
+            final matchesTag = switch (_selectedFilter) {
+              HistoryFilter.sent => file.isSent,
+              HistoryFilter.received => !file.isSent,
+              HistoryFilter.all => true,
+            };
+
+            final matchesQuery = _searchQuery.isEmpty || file.fileName.toLowerCase().contains(_searchQuery);
+
+            return matchesTag && matchesQuery;
           }).toList();
+
+          final emptyMessage = _searchQuery.isNotEmpty ? "No matching files found for this filter." : "No kinetic movement found in this sector.";
 
           return SingleChildScrollView(
             padding: EdgeInsets.symmetric(horizontal: 40.w, vertical: 20.h),
@@ -76,6 +91,39 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     _tabPill("Received", HistoryFilter.received),
                   ],
                 ),
+                Gap(18.h),
+
+                // Search
+                Container(
+                  height: 44.h,
+                  padding: EdgeInsets.symmetric(horizontal: 14.w),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceContainerLowest,
+                    borderRadius: BorderRadius.circular(20.r),
+                    border: Border.all(color: AppColors.surfaceContainerHigh),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.search_rounded, color: Colors.grey, size: 18.sp),
+                      Gap(8.w),
+                      Expanded(
+                        child: TextField(
+                          onChanged: _onSearchChanged,
+                          style: TextStyle(color: Colors.white, fontSize: 13.sp),
+                          decoration: InputDecoration(
+                            hintText: 'Search files...',
+                            hintStyle: TextStyle(color: Colors.grey, fontSize: 12.sp),
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            isDense: true,
+                            filled: false,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 Gap(32.h),
 
                 // List
@@ -84,7 +132,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     child: Padding(
                       padding: EdgeInsets.symmetric(vertical: 40.h),
                       child: Text(
-                        "No kinetic movement found in this sector.",
+                        emptyMessage,
                         style: TextStyle(color: Colors.grey.shade600, fontSize: 14.sp),
                       ),
                     ),

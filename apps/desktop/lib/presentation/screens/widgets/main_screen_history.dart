@@ -2,18 +2,33 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:gap/gap.dart';
+import 'package:test/data/models/file_model.dart';
 import 'package:test/logic/cubits/hotdrop_cubit.dart';
 import 'package:test/presentation/screens/history_screen.dart';
 import 'package:test/presentation/theme/app_colors.dart';
 
 class MainScreenHistory extends StatelessWidget {
-  const MainScreenHistory({super.key});
+  final String searchQuery;
+
+  const MainScreenHistory({super.key, required this.searchQuery});
 
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<HotdropCubit, HotdropState>(
       builder: (context, state) {
-        final completedTransfers = state.completedTransfers.take(4).toList(growable: false);
+        final normalizedQuery = searchQuery.trim().toLowerCase();
+        final isSearching = normalizedQuery.isNotEmpty;
+
+        final filteredCompletedTransfers = isSearching
+            ? state.completedTransfers.where((transfer) => transfer.fileName.toLowerCase().contains(normalizedQuery)).toList(growable: false)
+            : state.completedTransfers;
+
+        final completedTransfers = filteredCompletedTransfers.take(4).toList(growable: false);
+
+        final activeTransfer = state.activeTransfer;
+        final shouldShowActiveTransfer = activeTransfer != null && (!isSearching || activeTransfer.fileName.toLowerCase().contains(normalizedQuery));
+
+        final hasResults = shouldShowActiveTransfer || completedTransfers.isNotEmpty;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -48,17 +63,17 @@ class MainScreenHistory extends StatelessWidget {
               ],
             ),
             Gap(20.h),
-            if (state.activeTransfer != null)
+            if (shouldShowActiveTransfer)
               _TransferCard(
                 icon: Icons.insert_drive_file_rounded,
-                filename: state.activeTransfer!.fileName,
-                size: state.activeTransfer!.sizeLabel,
-                speed: state.activeTransfer!.speedLabel,
-                progress: state.activeTransfer!.progress,
-                isSending: state.activeTransfer!.isSent,
+                filename: activeTransfer!.fileName,
+                size: activeTransfer.sizeLabel,
+                speed: activeTransfer.speedLabel,
+                progress: activeTransfer.progress,
+                isSending: activeTransfer.isSent,
                 isActive: true,
               ),
-            if (state.activeTransfer == null && completedTransfers.isEmpty)
+            if (!hasResults)
               Container(
                 padding: EdgeInsets.all(20.w),
                 decoration: BoxDecoration(
@@ -66,21 +81,35 @@ class MainScreenHistory extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20.r),
                 ),
                 child: Text(
-                  'No recent transfers yet.',
+                  isSearching ? 'No files match your search.' : 'No recent transfers yet.',
                   style: TextStyle(color: Colors.grey, fontSize: 12.sp),
                 ),
               ),
-            ...completedTransfers.map(
-              (transfer) => _TransferCard(
-                icon: _iconForFile(transfer.fileName),
-                filename: transfer.fileName,
-                size: transfer.sizeLabel,
-                speed: transfer.speedLabel,
-                progress: transfer.progress,
-                statusText: transfer.statusLabel,
-                isActive: false,
-              ),
-            ),
+            ...completedTransfers.map((transfer) {
+              final canOpen = transfer.location != null && transfer.isAvailable;
+
+              return MouseRegion(
+                cursor: canOpen ? SystemMouseCursors.click : SystemMouseCursors.basic,
+                child: GestureDetector(
+                  onTap: canOpen
+                      ? () {
+                          context.read<HotdropCubit>().openLocalFile(
+                                FileModel(name: transfer.fileName, location: transfer.location),
+                              );
+                        }
+                      : null,
+                  child: _TransferCard(
+                    icon: _iconForFile(transfer.fileName),
+                    filename: transfer.fileName,
+                    size: transfer.sizeLabel,
+                    speed: transfer.speedLabel,
+                    progress: transfer.progress,
+                    statusText: transfer.statusLabel,
+                    isActive: false,
+                  ),
+                ),
+              );
+            }),
           ],
         );
       },

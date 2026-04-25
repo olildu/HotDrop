@@ -20,6 +20,18 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
+  String _fileSearchQuery = '';
+
+  void _handleFileSearchChanged(String query) {
+    if (_fileSearchQuery == query) {
+      return;
+    }
+
+    setState(() {
+      _fileSearchQuery = query;
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -38,7 +50,10 @@ class _MainScreenState extends State<MainScreen> {
           body: SafeArea(
             child: Column(
               children: [
-                MainScreenTopBar(viewModel: viewModel),
+                MainScreenTopBar(
+                  viewModel: viewModel,
+                  onSearchChanged: _handleFileSearchChanged,
+                ),
                 Expanded(
                   child: SingleChildScrollView(
                     padding: EdgeInsets.symmetric(horizontal: 40.w, vertical: 20.h),
@@ -57,7 +72,10 @@ class _MainScreenState extends State<MainScreen> {
                                   : MainScreenConnectionSelection(viewModel: viewModel, actions: actions),
                             ),
                             Gap(40.w),
-                            const Expanded(flex: 7, child: MainScreenHistory()),
+                            Expanded(
+                              flex: 7,
+                              child: MainScreenHistory(searchQuery: _fileSearchQuery),
+                            ),
                           ],
                         ),
                       ],
