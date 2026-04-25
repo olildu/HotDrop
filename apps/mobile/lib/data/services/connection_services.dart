@@ -18,8 +18,8 @@ import 'package:device_info_plus/device_info_plus.dart';
 // REPOSITORY AND BLOC IMPORTS
 import 'package:test_mobile/logic/di/injection_container.dart' as di;
 import 'package:test_mobile/logic/cubits/session/session_cubit.dart';
-import 'package:test_mobile/data/repositories/chat_repository.dart';
 import 'package:test_mobile/data/repositories/file_repository.dart';
+import 'package:test_mobile/logic/cubits/popup_cubit.dart';
 
 class AndroidFunction {
   static const platform = MethodChannel('com.example.wifi_direct/channel');
@@ -142,15 +142,17 @@ class ClientServices {
         socket!.listen(
           (data) {
             final message = String.fromCharCodes(data).trim();
-            ReceivedDataParser(di.sl<ChatRepository>(), di.sl<FileRepository>()).parseData(message);
+            ReceivedDataParser(di.sl<FileRepository>()).parseData(message);
           },
           onError: (e) {
             connectedToPort = false;
             di.sl<SessionCubit>().updateConnectionStatus(false);
+            di.sl<PopupCubit>().hide();
           },
           onDone: () {
             connectedToPort = false;
             di.sl<SessionCubit>().updateConnectionStatus(false);
+            di.sl<PopupCubit>().hide();
           },
         );
         return true;
@@ -226,17 +228,19 @@ class DartFunction {
         log('Received: $message', name: "Server");
 
         // ---> FIX: Pass Repositories to Parser
-        ReceivedDataParser(di.sl<ChatRepository>(), di.sl<FileRepository>()).parseData(message);
+        ReceivedDataParser(di.sl<FileRepository>()).parseData(message);
       },
       onError: (e) {
         log("Socket Error: $e", name: "Server");
         connectedToPort = false;
         di.sl<SessionCubit>().updateConnectionStatus(false);
+        di.sl<PopupCubit>().hide();
       },
       onDone: () {
         log("Client disconnected", name: "Server");
         connectedToPort = false;
         di.sl<SessionCubit>().updateConnectionStatus(false);
+        di.sl<PopupCubit>().hide();
       },
     );
   }

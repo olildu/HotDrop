@@ -1,11 +1,12 @@
 import 'dart:convert';
 import 'dart:developer';
 import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:flutter_contacts/contact.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:test_mobile/logic/cubits/hotdrop_cubit.dart'; // Required for progress updates
-import 'package:test_mobile/logic/cubits/message_cubit.dart';
+import 'package:test_mobile/logic/cubits/popup_cubit.dart';
 import 'package:test_mobile/data/models/file_model.dart';
 import 'package:test_mobile/data/repositories/chat_repository.dart';
 import 'package:test_mobile/data/repositories/file_repository.dart';
@@ -14,10 +15,9 @@ import 'package:test_mobile/data/services/connection_services.dart';
 import 'package:test_mobile/data/services/file_hosting_services.dart';
 
 class ReceivedDataParser {
-  final ChatRepository _chatRepository;
   final FileRepository _fileRepository;
 
-  ReceivedDataParser(this._chatRepository, this._fileRepository);
+  ReceivedDataParser(this._fileRepository);
 
   void parseData(String data) {
     // FIX: Handle clumped JSON objects (e.g., "{...}{...}") by inserting newlines before parsing
@@ -33,7 +33,10 @@ class ReceivedDataParser {
         if (parsedData["type"] == "message") {
           final content = parsedData["content"];
           di.sl<ChatRepository>().onMessageReceived(content);
+          di.sl<PopupCubit>().show('New message: $content', Icons.message_rounded);
         } else if (parsedData["type"] == "HotDropFile") {
+          final fileName = parsedData["name"]?.toString() ?? 'Incoming file';
+          di.sl<PopupCubit>().show('Incoming file: $fileName', Icons.download_rounded, progress: 0);
           _downloadFileFromHost(parsedData["url"], parsedData["name"], parsedData["size"]);
         }
         // FIX: Match the actual type "downloadProgress" seen in logs
@@ -47,11 +50,13 @@ class ReceivedDataParser {
 
           log("Updating UI progress to: ${(normalizedProgress * 100).toInt()}%", name: "Parser");
           di.sl<HotDropCubit>().updateProgress(normalizedProgress);
+          di.sl<PopupCubit>().updateProgress(normalizedProgress);
         } else if (parsedData["type"] == "downloadComplete") {
           di.sl<HotDropCubit>().completeTransfer();
 
           final hostingService = di.sl<FileHostingService>();
           final String fileName = parsedData["name"];
+          di.sl<PopupCubit>().complete('File received: $fileName');
 
           final hostedFile = hostingService.selectedFiles.firstWhere(
             (file) => file.path.split('/').last == fileName,
@@ -104,6 +109,7 @@ class ReceivedDataParser {
               "progress_percent": currentProgress.toStringAsFixed(2),
               "name": fileName,
             }));
+            di.sl<PopupCubit>().updateProgress((currentProgress / 100).clamp(0.0, 1.0));
           }
         }).asFuture();
 
@@ -126,9 +132,13 @@ class ReceivedDataParser {
 
         // Notify the Sender (Host) that we have finished the download
         DartFunction().sendDataToSocket(jsonEncode({"type": "downloadComplete", "name": fileName, "size": fileSize, "transfer_speed": speed}));
+        di.sl<PopupCubit>().complete('File received: $fileName');
+      } else {
+        di.sl<PopupCubit>().hide();
       }
     } catch (e) {
       log("Download error: $e");
+      di.sl<PopupCubit>().hide();
     }
   }
 }
