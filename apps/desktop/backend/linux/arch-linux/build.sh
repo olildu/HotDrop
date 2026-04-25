@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 ASSETS_BIN_DIR="$PROJECT_ROOT/assets/bin"
-OUTPUT_NAME="HotDropBLE.exe"
+OUTPUT_NAME="HotDropBLE"
 
 cd "$SCRIPT_DIR"
 
@@ -32,7 +32,7 @@ VENV_DIR="$SCRIPT_DIR/.venv-build"
 source "$VENV_DIR/bin/activate"
 
 if ! python - <<'PY'
-import importlib
+import importlib.util
 required = ["dbus", "gi"]
 missing = [m for m in required if importlib.util.find_spec(m) is None]
 if missing:
@@ -46,15 +46,15 @@ fi
 
 python -m pip install --upgrade pip setuptools wheel
 if [[ -f "$SCRIPT_DIR/requirements.txt" ]]; then
-  pip install -r "$SCRIPT_DIR/requirements.txt"
+  python -m pip install -r "$SCRIPT_DIR/requirements.txt"
 else
-  pip install pyinstaller bleak
+  python -m pip install pyinstaller bleak
 fi
 
 echo "==============================="
 echo "Building Linux distributable..."
 echo "==============================="
-pyinstaller --clean --onefile \
+python -m PyInstaller --clean --onefile \
   --name "$OUTPUT_NAME" \
   --hidden-import dbus.mainloop.glib \
   --hidden-import gi.repository.GLib \

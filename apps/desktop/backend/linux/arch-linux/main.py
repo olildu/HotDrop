@@ -38,6 +38,12 @@ adv_mgr_iface = None
 app_obj = None
 adv_obj = None
 
+# Runtime guards to avoid overlapping BlueZ operations.
+active_scan_stop_event = None
+active_scan_done_event = None
+scan_state_lock = asyncio.Lock()
+ble_operation_lock = asyncio.Lock()
+
 def log(msg):
     temp_dir = tempfile.gettempdir()
     path = os.path.join(temp_dir, "hotdrop_ble_logs.txt")
@@ -202,7 +208,36 @@ def stop_ble():
     log("BLE stopped")
     return "BLE stopped"
 
+async def stop_active_scan(reason=None, timeout=3.0):
+    global active_scan_stop_event, active_scan_done_event
+
+    async with scan_state_lock:
+        stop_event = active_scan_stop_event
+        done_event = active_scan_done_event
+
+    if stop_event is None or done_event is None:
+        return
+
+    if reason:
+        log(f"Stopping active scan: {reason}")
+
+    stop_event.set()
+    try:
+        await asyncio.wait_for(done_event.wait(), timeout=timeout)
+    except asyncio.TimeoutError:
+        log("Timed out waiting for active scan to stop")
+
 async def stream_hosts(writer):
+    global active_scan_stop_event, active_scan_done_event
+
+    await stop_active_scan("new stream_hosts request")
+
+    stop_event = asyncio.Event()
+    done_event = asyncio.Event()
+    async with scan_state_lock:
+        active_scan_stop_event = stop_event
+        active_scan_done_event = done_event
+
     log("Starting host scan...")
     found_devices_dict = {}
     queue = asyncio.Queue()
@@ -223,25 +258,41 @@ async def stream_hosts(writer):
 
     try:
         end_time = loop.time() + 15.0 
-        while loop.time() < end_time:
+        while loop.time() < end_time and not stop_event.is_set():
             try:
                 new_host = await asyncio.wait_for(queue.get(), timeout=1.0)
+                log(f"Streaming discovered host to socket client: {new_host['name']} ({new_host['address']})")
                 writer.write((json.dumps({"status": "found", "host": new_host}) + "\n").encode())
                 await writer.drain()
             except asyncio.TimeoutError:
                 continue
     finally:
-        await scanner.stop()
-        writer.write((json.dumps({"status": "done"}) + "\n").encode())
-        await writer.drain()
+        try:
+            await scanner.stop()
+        except Exception as e:
+            log(f"Scanner stop error: {e}")
+
+        if not writer.is_closing():
+            writer.write((json.dumps({"status": "done"}) + "\n").encode())
+            await writer.drain()
+
+        done_event.set()
+        async with scan_state_lock:
+            if active_scan_stop_event is stop_event:
+                active_scan_stop_event = None
+                active_scan_done_event = None
 
 async def fetch_connection_data(address):
     try:
         log(f"Connecting to {address}...")
         async with BleakClient(address, timeout=10.0) as client:
-            data = await client.read_gatt_char(CHAR_UUID)
-            return {"status": "success", "data": json.loads(data.decode())}
+            raw_data = await client.read_gatt_char(CHAR_UUID)
+            decoded_data = json.loads(raw_data.decode())
+            # Added log here to see the data inside the service
+            log(f"Successfully fetched data from {address}: {decoded_data}")
+            return {"status": "success", "data": decoded_data}
     except Exception as e:
+        log(f"Failed to fetch data from {address}: {e}")
         return {"status": "error", "message": str(e)}
 
 # ==========================================
@@ -250,6 +301,7 @@ async def fetch_connection_data(address):
 
 async def handle_client(reader, writer):
     global BLE_PAYLOAD_STRING
+    command = "unknown"
     try:
         raw_data = await reader.read(4096)
         if not raw_data: return
@@ -269,17 +321,23 @@ async def handle_client(reader, writer):
             response = {"status": "ok", "message": stop_ble()}
 
         elif command == "connect_to":
-            response = await fetch_connection_data(request.get("address"))
+            await stop_active_scan("connect_to request")
+            async with ble_operation_lock:
+                response = await fetch_connection_data(request.get("address"))
         
         else:
             response = {"status": "error", "message": "Unknown command"}
 
+        # Added logging for the final response being sent back
+        log(f"Socket Response for '{command}': {response}")
+        
         writer.write(json.dumps(response).encode())
         await writer.drain()
     except Exception as e:
-        log(f"Socket Handler Error: {e}")
+        log(f"Socket Handler Error for '{command}': {e}")
     finally:
         writer.close()
+        await writer.wait_closed()
 
 async def main():
     server = await asyncio.start_server(handle_client, "127.0.0.1", 8765)

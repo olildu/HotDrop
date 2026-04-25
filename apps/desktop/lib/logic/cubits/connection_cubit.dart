@@ -139,7 +139,11 @@ class ConnectionCubit extends Cubit<ConnectionState> {
       ),
     );
 
-    final data = await globals.bleInteropService.fetchConnectionData(address, (msg) => log(msg));
+    final data = await globals.bleInteropService.fetchConnectionData(
+      address,
+      name,
+      (msg) => log(msg),
+    );
 
     if (isClosed) {
       return;
@@ -159,7 +163,12 @@ class ConnectionCubit extends Cubit<ConnectionState> {
     final String? password = data['password'];
 
     if (Platform.isWindows && ssid != null && password != null && ssid.isNotEmpty && password.isNotEmpty) {
-      final wifiConnected = await _connectToWindowsWifi(ssid, password);
+      bool wifiConnected = false;
+      if (Platform.isWindows) {
+        wifiConnected = await _connectToWindowsWifi(ssid, password);
+      } else if (Platform.isLinux) {
+        wifiConnected = await _connectToLinuxWifi(ssid, password);
+      }
 
       if (isClosed) {
         return;
@@ -325,6 +334,32 @@ class ConnectionCubit extends Cubit<ConnectionState> {
       exit(0);
     } catch (e) {
       log('Error checking or elevating privileges: $e');
+      return false;
+    }
+  }
+
+  Future<bool> _connectToLinuxWifi(String ssid, String password) async {
+    emit(state.copyWith(loadingStatus: 'Connecting to Wi-Fi: $ssid (Linux)...'));
+    try {
+      // nmcli device wifi connect <SSID> password <PASSWORD>
+      final result = await Process.run('nmcli', [
+        'device',
+        'wifi',
+        'connect',
+        ssid,
+        'password',
+        password,
+      ]);
+
+      if (result.exitCode == 0) {
+        log('Successfully connected to Wi-Fi: $ssid');
+        return true;
+      }
+
+      log('Linux Wi-Fi connection failed: ${result.stderr}');
+      return false;
+    } catch (e) {
+      log('Error executing Linux Wi-Fi command: $e');
       return false;
     }
   }
