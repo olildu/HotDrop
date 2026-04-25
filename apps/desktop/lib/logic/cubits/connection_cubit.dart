@@ -350,15 +350,14 @@ class ConnectionCubit extends Cubit<ConnectionState> {
     }
   }
 
-
   Future<bool> _connectToLinuxWifi(String ssid, String password) async {
     emit(state.copyWith(loadingStatus: 'Refreshing Wi-Fi list...'));
-    
+
     try {
       // 1. Force a rescan so nmcli "sees" the hotspot
       _log('_connectToLinuxWifi', 'Requesting Wi-Fi rescan');
       await Process.run('nmcli', ['device', 'wifi', 'rescan']);
-      
+
       // 2. Wait 2 seconds for the scan to populate results
       await Future.delayed(const Duration(seconds: 2));
 
@@ -379,19 +378,10 @@ class ConnectionCubit extends Cubit<ConnectionState> {
         return true;
       }
 
-      // 4. If it fails, try one more time specifically as a "hidden" network 
+      // 4. If it fails, try one more time specifically as a "hidden" network
       // (some Android hotspots report as hidden to nmcli)
       _log('_connectToLinuxWifi', 'Initial attempt failed, retrying as hidden...');
-      final retryResult = await Process.run('nmcli', [
-        'device',
-        'wifi',
-        'connect',
-        ssid,
-        'password',
-        password,
-        'hidden',
-        'yes'
-      ]);
+      final retryResult = await Process.run('nmcli', ['device', 'wifi', 'connect', ssid, 'password', password, 'hidden', 'yes']);
 
       if (retryResult.exitCode == 0) {
         return true;
@@ -406,17 +396,21 @@ class ConnectionCubit extends Cubit<ConnectionState> {
   }
 
   Future<bool> _connectToWindowsWifi(String ssid, String password) async {
-    emit(state.copyWith(loadingStatus: 'Connecting to Wi-Fi: $ssid...'));
+    emit(state.copyWith(loadingStatus: 'Scanning for $ssid...'));
 
     final psScript = '''
 		\$ErrorActionPreference = 'SilentlyContinue'
 		\$ssid = "$ssid"
 		\$password = "$password"
     
-		Write-Output "Step 1: Preparing profile for \$ssid"
-		\$authType = "WPA2PSK" 
+		Write-Output "Step 0: Forcing rescan and disconnecting from current network..."
+		# This triggers a hardware scan
+		netsh wlan show networks | Out-Null
+		# Force disconnect so Windows doesn't "cling" to the open network
+		netsh wlan disconnect | Out-Null
+		Start-Sleep -Seconds 2
 
-		# Convert SSID to Hex to avoid XML parsing errors
+		Write-Output "Step 1: Preparing profile for \$ssid"
 		\$hexSsid = [System.BitConverter]::ToString([System.Text.Encoding]::UTF8.GetBytes(\$ssid)).Replace('-', '')
 
 		\$xml = @"
@@ -434,7 +428,7 @@ class ConnectionCubit extends Cubit<ConnectionState> {
 		<MSM>
 				<security>
 						<authEncryption>
-								<authentication>\$authType</authentication>
+								<authentication>WPA2PSK</authentication>
 								<encryption>AES</encryption>
 								<useOneX>false</useOneX>
 						</authEncryption>
@@ -456,25 +450,27 @@ class ConnectionCubit extends Cubit<ConnectionState> {
 				netsh wlan add profile filename="\$xmlPath" | Out-Null
 				Remove-Item -Path \$xmlPath
 
-				Write-Output "Step 3: Sending connect command..."
-				\$connectOutput = netsh wlan connect name="\$ssid" 2>&1
-				Write-Output "Connect Command Output: \$connectOutput"
-
-				Write-Output "Step 4: Verifying actual connection state (waiting up to 25s)..."
+				Write-Output "Step 3: Attempting connection (looping visibility check)..."
 				\$connected = \$false
-				for (\$i = 1; \$i -le 25; \$i++) {
-						Start-Sleep -Seconds 1
-            
-						\$status = netsh wlan show interfaces | Out-String
-            
-						\$currentState = "unknown"
-						if (\$status -match "State\\s+:\\s+(.*)") {
-								\$currentState = \$matches[1].Trim()
+				
+				# We loop up to 10 times just to wait for the SSID to appear in netsh's list
+				for (\$j = 1; \$j -le 10; \$j++) {
+						\$visible = netsh wlan show networks | Out-String
+						if (\$visible -match [regex]::Escape(\$ssid)) {
+								Write-Output "  [Attempt \$j] SSID is now visible. Connecting..."
+								netsh wlan connect name="\$ssid" | Out-Null
+								break
 						}
-            
-						Write-Output "  [Sec \$i] State: \$currentState"
+						Write-Output "  [Attempt \$j] SSID not yet visible to netsh. Scanning again..."
+						netsh wlan show networks | Out-Null
+						Start-Sleep -Seconds 2
+				}
 
-						if (\$currentState -eq "connected" -and \$status -match "SSID\\s+:\\s+\$ssid") {
+				Write-Output "Step 4: Verifying actual connection state..."
+				for (\$i = 1; \$i -le 20; \$i++) {
+						Start-Sleep -Seconds 1
+						\$status = netsh wlan show interfaces | Out-String
+						if (\$status -match "State\\s+:\\s+connected" -and \$status -match "SSID\\s+:\\s+" + [regex]::Escape(\$ssid)) {
 								\$connected = \$true
 								Write-Output "Success: Connected to \$ssid"
 								break
@@ -482,28 +478,20 @@ class ConnectionCubit extends Cubit<ConnectionState> {
 				}
 
 				if (-not \$connected) {
-						Write-Output "Error: Failed to verify connection to \$ssid. Final state: \$currentState"
 						exit 1
 				}
 		} catch {
-				Write-Output "Exception occurred: \$(\$_.ToString())"
 				exit 1
 		}
 	''';
 
     try {
       final result = await Process.run('powershell.exe', ['-NoProfile', '-Command', psScript]);
-
-      if (result.stdout.toString().isNotEmpty) {
-        _log('_connectToWindowsWifi', 'Wi-Fi connection diagnostics: ${result.stdout.toString().trim()}');
-      }
-
       if (result.exitCode == 0) {
         _log('_connectToWindowsWifi', 'Successfully verified connection to Wi-Fi: $ssid');
         return true;
       }
-
-      _log('_connectToWindowsWifi', 'Wi-Fi connection failed. Stderr: ${result.stderr}');
+      _log('_connectToWindowsWifi', 'Wi-Fi connection failed. Diagnostic: ${result.stdout}');
       return false;
     } catch (e) {
       _log('_connectToWindowsWifi', 'Error executing Wi-Fi PowerShell script', error: e);
