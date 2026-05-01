@@ -16,6 +16,7 @@ class BleInteropService {
   Timer? _pingTimer;
   int _failedPings = 0;
   bool _isRecovering = false;
+  int _ipcPort = 8765;
 
   static const Duration _bridgeConnectTimeout = Duration(seconds: 5);
   static const String _requiredVersion = "1.0.0";
@@ -24,7 +25,7 @@ class BleInteropService {
     dev.log(message, name: functionName, error: error, stackTrace: stackTrace);
   }
 
-  String _getExePath(Function(String) log) {
+  Future<String> _getExePath(Function(String) log) async {
     _log('_getExePath', 'Resolving BLE bridge executable path');
     final String executableName =
         Platform.isWindows ? 'HotDropBLE.exe' : 'HotDropBLE';
@@ -36,16 +37,12 @@ class BleInteropService {
         baseDir, 'data', 'flutter_assets', 'assets', 'bin', executableName);
     String prodFallbackPath = p.join(
         baseDir, 'data', 'flutter_assets', 'assets', 'bin', fallbackName);
-    String projectRoot =
-        p.normalize(p.join(baseDir, '..', '..', '..', '..', '..'));
-    String devPath = p.join(projectRoot, 'assets', 'bin', executableName);
-    String devFallbackPath = p.join(projectRoot, 'assets', 'bin', fallbackName);
 
     if (File(prodPath).existsSync()) return prodPath;
     if (File(prodFallbackPath).existsSync()) return prodFallbackPath;
 
     // Check support directory for staged binary
-    return _getStagedPath(executableName);
+    return await _getStagedPath(executableName);
   }
 
   Future<String> _getStagedPath(String executableName) async {
@@ -82,14 +79,22 @@ class BleInteropService {
     return stagedPath;
   }
 
+  Future<int> _findFreePort() async {
+    final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    final port = server.port;
+    await server.close();
+    return port;
+  }
+
   Future<void> _ensureServerRunning(Function(String) log) async {
     if (_serverProcess != null) return;
     try {
       _log('_ensureServerRunning', 'Starting BLE bridge process');
-      final sourcePath = _getExePath(log);
+      final sourcePath = await _getExePath(log);
       final exePath = await _ensureExecutablePath(sourcePath, log);
       
-      _serverProcess = await Process.start(exePath, []);
+      _ipcPort = await _findFreePort();
+      _serverProcess = await Process.start(exePath, ["--port", _ipcPort.toString()]);
       
       // Monitor stderr for crashes
       _serverProcess!.stderr.transform(utf8.decoder).listen((error) {
@@ -116,7 +121,7 @@ class BleInteropService {
         await _stageBinary(sourcePath);
         
         // Final attempt
-        _serverProcess = await Process.start(exePath, []);
+        _serverProcess = await Process.start(exePath, ["--port", _ipcPort.toString()]);
         await Future.delayed(const Duration(milliseconds: 1000));
       }
 
@@ -183,7 +188,7 @@ class BleInteropService {
     final int sessionId = ++_hostScanSession;
 
     try {
-      final socket = await Socket.connect('127.0.0.1', 8765);
+      final socket = await Socket.connect('127.0.0.1', _ipcPort);
       _hostStreamSocket = socket;
       final payload = {"command": "stream_hosts"};
       socket.write(jsonEncode(payload));
@@ -258,7 +263,7 @@ class BleInteropService {
       String cmd, Map<String, dynamic>? extras, Function(String) log) async {
     _log('_sendCommand', 'Sending bridge command: $cmd');
     try {
-      final socket = await Socket.connect('127.0.0.1', 8765)
+      final socket = await Socket.connect('127.0.0.1', _ipcPort)
           .timeout(_bridgeConnectTimeout);
 
       final Map<String, dynamic> payload = {"command": cmd};
@@ -290,7 +295,7 @@ class BleInteropService {
     final completer = Completer<String?>();
 
     try {
-      final socket = await Socket.connect('127.0.0.1', 8765)
+      final socket = await Socket.connect('127.0.0.1', _ipcPort)
           .timeout(_bridgeConnectTimeout);
       socket.write(jsonEncode({"command": "stream_hosts"}));
 

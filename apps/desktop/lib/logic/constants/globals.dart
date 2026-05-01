@@ -18,3 +18,7 @@ bool isHotspotActive = false;
 String? activeHotspotSsid;
 
 final BleInteropService bleInteropService = BleInteropService();
+
+int tcpServerPort = 42069;
+int httpPort = 8081;
+int ipcPort = 8765;

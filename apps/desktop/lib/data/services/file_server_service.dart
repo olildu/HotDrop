@@ -3,6 +3,7 @@ import 'dart:developer' as dev;
 import 'package:shelf/shelf_io.dart' as io;
 import 'package:shelf_static/shelf_static.dart';
 import 'security_service.dart';
+import 'package:test/logic/constants/globals.dart' as globals;
 
 class FileServerService {
   static HttpServer? _server;
@@ -31,16 +32,18 @@ class FileServerService {
         defaultDocument: fileName
       );
 
-      // Use port 8081 for the file transfer
+      // Use port 0 for dynamic binding
       final context = await SecurityService().getServerContext();
-      _server = await io.serve(handler, InternetAddress.anyIPv4, 8081, securityContext: context);
+      _server = await io.serve(handler, InternetAddress.anyIPv4, 0, securityContext: context);
+      
+      globals.httpPort = _server!.port;
 
       _log('startFileServer', 'Secure file server running at https://${_server!.address.host}:${_server!.port}');
       
       // URI encode the filename to handle spaces/special characters
       final encodedName = Uri.encodeComponent(fileName);
       _log('startFileServer', 'Generated secure file URL for $fileName');
-      return "https://$ip:8081/$encodedName";
+      return "https://$ip:${globals.httpPort}/$encodedName";
     } catch (e) {
       _log('startFileServer', 'Error starting file server', error: e);
       return null;
