@@ -22,6 +22,8 @@ CCCD_UUID = "00002902-0000-1000-8000-00805F9B34FB"
 BLE_PAYLOAD_STRING = "{}"
 provider = None
 shutdown_event = asyncio.Event()
+last_activity_time = 0
+WATCHDOG_TIMEOUT = 30.0 # Seconds
 
 def log(msg):
     temp_dir = tempfile.gettempdir()
@@ -141,7 +143,8 @@ async def fetch_connection_data(address):
 # --- END OF BLE LOGIC  ---
 
 async def handle_client(reader, writer):
-    global BLE_PAYLOAD_STRING
+    global BLE_PAYLOAD_STRING, last_activity_time
+    last_activity_time = asyncio.get_running_loop().time()
     try:
         data = await reader.read(4096)
         request = json.loads(data.decode())
@@ -181,7 +184,20 @@ async def handle_client(reader, writer):
     finally:
         writer.close()
 
+async def watchdog():
+    global last_activity_time
+    log(f"Watchdog started (timeout: {WATCHDOG_TIMEOUT}s)")
+    while not shutdown_event.is_set():
+        await asyncio.sleep(5)
+        if asyncio.get_running_loop().time() - last_activity_time > WATCHDOG_TIMEOUT:
+            log("Watchdog timeout: No activity from Flutter. Shutting down...")
+            shutdown_event.set()
+            break
+
 async def main():
+    global last_activity_time
+    last_activity_time = asyncio.get_event_loop().time()
+    
     server = await asyncio.start_server(handle_client, "127.0.0.1", 8765)
     log("Python Socket server running")
     
@@ -189,9 +205,10 @@ async def main():
         # Run until shutdown_event is set
         server_task = asyncio.create_task(server.serve_forever())
         shutdown_task = asyncio.create_task(shutdown_event.wait())
+        watchdog_task = asyncio.create_task(watchdog())
         
         done, pending = await asyncio.wait(
-            [server_task, shutdown_task],
+            [server_task, shutdown_task, watchdog_task],
             return_when=asyncio.FIRST_COMPLETED
         )
         
