@@ -18,6 +18,7 @@ class BleInteropService {
   bool _isRecovering = false;
 
   static const Duration _bridgeConnectTimeout = Duration(seconds: 5);
+  static const String _requiredVersion = "1.0.0";
 
   void _log(String functionName, String message, {Object? error, StackTrace? stackTrace}) {
     dev.log(message, name: functionName, error: error, stackTrace: stackTrace);
@@ -42,44 +43,42 @@ class BleInteropService {
 
     if (File(prodPath).existsSync()) return prodPath;
     if (File(prodFallbackPath).existsSync()) return prodFallbackPath;
-    if (File(devPath).existsSync()) return devPath;
-    if (File(devFallbackPath).existsSync()) return devFallbackPath;
-    _log('_getExePath', 'BLE executable could not be resolved');
-    throw Exception("BLE Executable not found.");
+
+    // Check support directory for staged binary
+    return _getStagedPath(executableName);
   }
 
-  Future<String> _ensureExecutablePath(String sourcePath) async {
-    if (!Platform.isLinux) {
-      return sourcePath;
-    }
-
-    _log('_ensureExecutablePath', 'Ensuring Linux executable permissions for $sourcePath');
-
-    final sourceFile = File(sourcePath);
-    final stat = sourceFile.statSync();
-    const int executableMask = 0x49;
-
-    if ((stat.mode & executableMask) != 0) {
-      return sourcePath;
-    }
-
+  Future<String> _getStagedPath(String executableName) async {
     final supportDir = await getApplicationSupportDirectory();
-    final stagingDir = Directory(p.join(supportDir.path, 'bin'));
-    if (!await stagingDir.exists()) {
-      await stagingDir.create(recursive: true);
+    return p.join(supportDir.path, 'bin', executableName);
+  }
+
+  Future<void> _stageBinary(String sourcePath) async {
+    _log('_stageBinary', 'Staging binary from $sourcePath');
+    final stagedPath = await _getStagedPath(p.basename(sourcePath));
+    final stagedFile = File(stagedPath);
+
+    if (!await stagedFile.parent.exists()) {
+      await stagedFile.parent.create(recursive: true);
     }
 
-    final stagedPath = p.join(stagingDir.path, p.basename(sourcePath));
-    await sourceFile.copy(stagedPath);
+    await File(sourcePath).copy(stagedPath);
 
-    final chmodResult = await Process.run('chmod', ['+x', stagedPath]);
-    if (chmodResult.exitCode != 0) {
-      throw Exception(
-          'Failed to mark BLE executable as runnable: ${chmodResult.stderr}');
+    if (Platform.isLinux || Platform.isMacOS) {
+      await Process.run('chmod', ['+x', stagedPath]);
     }
-
     _stagedExecutablePath = stagedPath;
-    _log('_ensureExecutablePath', 'Staged BLE executable at $stagedPath');
+  }
+
+  Future<String> _ensureExecutablePath(String sourcePath, Function(String) log) async {
+    final stagedPath = await _getStagedPath(p.basename(sourcePath));
+    final stagedFile = File(stagedPath);
+
+    // If staged file doesn't exist, stage it
+    if (!stagedFile.existsSync()) {
+      await _stageBinary(sourcePath);
+    }
+
     return stagedPath;
   }
 
@@ -87,7 +86,9 @@ class BleInteropService {
     if (_serverProcess != null) return;
     try {
       _log('_ensureServerRunning', 'Starting BLE bridge process');
-      final exePath = await _ensureExecutablePath(_getExePath(log));
+      final sourcePath = _getExePath(log);
+      final exePath = await _ensureExecutablePath(sourcePath, log);
+      
       _serverProcess = await Process.start(exePath, []);
       
       // Monitor stderr for crashes
@@ -101,7 +102,24 @@ class BleInteropService {
         }
       });
 
-      await Future.delayed(const Duration(milliseconds: 500));
+      await Future.delayed(const Duration(milliseconds: 1000));
+
+      // Version Handshake
+      final versionRes = await _sendCommand("version", null, log);
+      if (versionRes == null || versionRes['version'] != _requiredVersion) {
+        _log('_ensureServerRunning', 'Version mismatch or bridge unresponsive. Re-staging...');
+        await _stopServerGracefully();
+        _serverProcess?.kill();
+        _serverProcess = null;
+        
+        // Forced re-stage
+        await _stageBinary(sourcePath);
+        
+        // Final attempt
+        _serverProcess = await Process.start(exePath, []);
+        await Future.delayed(const Duration(milliseconds: 1000));
+      }
+
       _startPingService(log);
     } catch (e) {
       _log('_ensureServerRunning', 'Failed to start BLE bridge process', error: e);

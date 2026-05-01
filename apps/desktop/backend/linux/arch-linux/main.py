@@ -37,6 +37,8 @@ GATT_CHRC_IFACE = "org.bluez.GattCharacteristic1"
 GATT_SERVICE_IFACE = "org.bluez.GattService1"
 
 BLE_PAYLOAD_STRING = "{}"
+# Runtime Globals
+VERSION = "1.0.0"
 is_ble_running = False
 shutdown_event = asyncio.Event()
 last_activity_time = 0
@@ -351,6 +353,9 @@ async def handle_client(reader, writer):
 
         elif command == "ping":
             response = {"status": "pong"}
+
+        elif command == "version":
+            response = {"status": "ok", "version": VERSION}
 
         elif command == "kill":
             log("Kill command received. Shutting down...")

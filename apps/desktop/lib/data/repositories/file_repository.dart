@@ -25,10 +25,10 @@ class FileRepository {
 
   Future<List<FileModel>> getLocalFiles() async {
     dev.log('Loading local files from HotDrop directory', name: 'getLocalFiles');
-    final nDropDir = await CommonFunctions().getHotDropDirectory();
-    if (!await nDropDir.exists()) return [];
+    final hotDropDir = await CommonFunctions().getHotDropDirectory();
+    if (!await hotDropDir.exists()) return [];
 
-    return nDropDir.listSync().whereType<File>().map((entity) {
+    return hotDropDir.listSync().whereType<File>().map((entity) {
       return FileModel(
         name: entity.path.split(Platform.pathSeparator).last,
         location: entity.path,

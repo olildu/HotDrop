@@ -14,6 +14,7 @@ import 'logic/injection_container.dart' as di;
 import 'data/services/connection_services.dart';
 import 'package:test/presentation/theme/app_theme.dart';
 import 'package:test/presentation/widgets/main_screen/top_popup.dart';
+import 'logic/utils/update_utils.dart';
 
 import 'logic/cubits/message_cubit.dart';
 import 'logic/cubits/contact_cubit.dart';
@@ -41,8 +42,9 @@ Future<void> main() async {
       // 1. Initialize Dependency Injection Container
       await di.init();
 
-      // 2. Perform startup cleanup
+      // 2. Perform startup cleanup and update check
       hardCleanupOnStartup();
+      await UpdateUtils.initializeAutoUpdater();
 
       runApp(
         // 3. Replace MultiProvider with MultiBlocProvider

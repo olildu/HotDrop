@@ -23,21 +23,20 @@ class HttpFunctions {
     try {
       final stopwatch = Stopwatch()..start();
       final request = http.Request('GET', Uri.parse(url));
-      
+
       // Configure client to allow self-signed certificates
-      final httpClient = HttpClient()
-        ..badCertificateCallback = ((X509Certificate cert, String host, int port) => true);
+      final httpClient = HttpClient()..badCertificateCallback = ((X509Certificate cert, String host, int port) => true);
       final ioClient = IOClient(httpClient);
-      
+
       final response = await ioClient.send(request);
 
       if (response.statusCode == 200) {
-        final nDropDir = await CommonFunctions().getHotDropDirectory();
-        if (!await nDropDir.exists()) {
-          await nDropDir.create(recursive: true);
+        final hotDropDir = await CommonFunctions().getHotDropDirectory();
+        if (!await hotDropDir.exists()) {
+          await hotDropDir.create(recursive: true);
         }
 
-        final filePath = '${nDropDir.path}/$fileName';
+        final filePath = '${hotDropDir.path}/$fileName';
         final file = File(filePath);
         final sink = file.openWrite();
 

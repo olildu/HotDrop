@@ -5,14 +5,14 @@ import 'package:path_provider/path_provider.dart';
 class CommonFunctions {
   Future<Directory> getHotDropDirectory() async {
     final directory = await getApplicationDocumentsDirectory();
-    Directory hotDropFileLocation = Directory('${directory.path}/NDrop/HotDrop');
+    Directory hotDropFileLocation = Directory('${directory.path}/HotDrop');
 
     return hotDropFileLocation;
   }
 
   Future<File> getHotDropHistoryFile() async {
     final directory = await getApplicationDocumentsDirectory();
-    final storageDirectory = Directory('${directory.path}/NDrop');
+    final storageDirectory = Directory(directory.path);
 
     if (!await storageDirectory.exists()) {
       await storageDirectory.create(recursive: true);

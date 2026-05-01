@@ -29,6 +29,7 @@ sentry_sdk.init(
 )
 
 BLE_PAYLOAD_STRING = "{}"
+VERSION = "1.0.0"
 provider = None
 shutdown_event = asyncio.Event()
 last_activity_time = 0
@@ -188,6 +189,9 @@ async def handle_client(reader, writer):
 
         elif command == "ping":
             response = {"status": "pong"}
+
+        elif command == "version":
+            response = {"status": "ok", "version": VERSION}
 
         elif command == "kill":
             log("Kill command received. Shutting down...")
