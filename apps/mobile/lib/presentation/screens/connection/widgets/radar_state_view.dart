@@ -5,6 +5,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:gap/gap.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:test_mobile/logic/cubits/connection/connection_cubit.dart';
 import 'package:test_mobile/presentation/theme/app_colors.dart';
 import 'radar_pulse_painter.dart';
@@ -305,7 +306,27 @@ class _RadarStateViewState extends State<RadarStateView> with SingleTickerProvid
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                    )
+                    ),
+                  if (widget.isReceiving)
+                    GestureDetector(
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => BlocProvider.value(
+                            value: context.read<ConnectionCubit>(),
+                            child: const QrDisplayPage(),
+                          ),
+                        ),
+                      ),
+                      child: Text(
+                        "Show QR Code",
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: AppColors.primary,
+                          fontSize: 12.sp,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
                 ],
               )
             ],
@@ -350,6 +371,148 @@ class _RadarStateViewState extends State<RadarStateView> with SingleTickerProvid
             ),
           ],
         ),
+      ),
+    );
+  }
+
+}
+
+class QrDisplayPage extends StatelessWidget {
+  const QrDisplayPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Scaffold(
+      backgroundColor: AppColors.surface,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: const BackButton(color: AppColors.onSurface),
+        title: Text("Share QR Code", style: textTheme.titleMedium),
+      ),
+      body: BlocBuilder<ConnectionCubit, ConnectionCubitState>(
+        builder: (context, state) {
+          final qrData = state.qrData;
+          if (qrData == null) {
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.hourglass_top_rounded, size: 48.sp, color: AppColors.primary),
+                  Gap(16.h),
+                  Text(
+                    "Generating QR Code...",
+                    style: textTheme.titleMedium?.copyWith(color: AppColors.onSurfaceVariant),
+                  ),
+                  Gap(8.h),
+                  Text(
+                    "The hotspot is still starting up.",
+                    style: textTheme.bodySmall?.copyWith(color: AppColors.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return SingleChildScrollView(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 32.w, vertical: 24.h),
+              child: Column(
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(24.w),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(32.r),
+                    ),
+                    child: Column(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(16.w),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20.r),
+                          ),
+                          child: QrImageView(
+                            data: qrData,
+                            version: QrVersions.auto,
+                            size: 240.w,
+                            backgroundColor: Colors.white,
+                            eyeStyle: const QrEyeStyle(
+                              eyeShape: QrEyeShape.square,
+                              color: Colors.black,
+                            ),
+                            dataModuleStyle: const QrDataModuleStyle(
+                              dataModuleShape: QrDataModuleShape.square,
+                              color: Colors.black,
+                            ),
+                          ),
+                        ),
+                        Gap(20.h),
+                        if (state.blePin != null) ...[
+                          Container(
+                            width: double.infinity,
+                            padding: EdgeInsets.symmetric(vertical: 14.h, horizontal: 16.w),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(16.r),
+                              border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      "SECURE PAIRING PIN",
+                                      style: textTheme.labelSmall?.copyWith(
+                                        color: AppColors.primary,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: 1.2,
+                                      ),
+                                    ),
+                                    Gap(2.h),
+                                    Text(
+                                      "Enter on the connecting device",
+                                      style: textTheme.bodySmall?.copyWith(
+                                        color: AppColors.onSurfaceVariant,
+                                        fontSize: 10.sp,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                Text(
+                                  state.blePin!,
+                                  style: GoogleFonts.firaMono(
+                                    fontSize: 20.sp,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.primary,
+                                    letterSpacing: 3,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Gap(12.h),
+                        ],
+                        Text(
+                          "Scan this code with any HotDrop device to connect instantly.",
+                          textAlign: TextAlign.center,
+                          style: textTheme.bodySmall?.copyWith(
+                            color: AppColors.onSurfaceVariant,
+                            fontSize: 12.sp,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
