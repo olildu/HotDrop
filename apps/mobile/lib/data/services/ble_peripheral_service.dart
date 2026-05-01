@@ -8,7 +8,7 @@ class BlePeripheralService {
   BlePeripheralService._internal();
 
   // Links directly to the new channel in MainActivity.kt
-  static const MethodChannel _channel = MethodChannel('com.example.ble_poc/peripheral');
+  static const MethodChannel _channel = MethodChannel('com.olildu.hotdrop.ble_poc/peripheral');
 
   Future<void> startAdvertising(Map<String, String> connectionData) async {
     try {

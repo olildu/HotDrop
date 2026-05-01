@@ -24,7 +24,7 @@
 
 
     <application
-        android:label="test_mobile"
+        android:label="HotDrop"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

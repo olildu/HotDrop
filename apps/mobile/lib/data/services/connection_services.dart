@@ -28,7 +28,7 @@ void _logConnection(String functionName, String message, {Object? error, StackTr
 }
 
 class AndroidFunction {
-  static const platform = MethodChannel('com.example.wifi_direct/channel');
+  static const platform = MethodChannel('com.olildu.hotdrop.wifi_direct/channel');
 
   Future<Map<String, String>?> startHosting() async {
     try {
