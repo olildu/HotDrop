@@ -10,6 +10,7 @@ import 'package:test_mobile/presentation/screens/main/widgets/direct_comms_card.
 import 'package:test_mobile/presentation/screens/main/widgets/main_app_bar.dart';
 import 'package:test_mobile/presentation/screens/main/widgets/recent_velocity_card.dart';
 import 'package:test_mobile/presentation/screens/main/widgets/storage_vault_card.dart';
+import 'package:test_mobile/presentation/widgets/force_update_overlay.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -49,28 +50,34 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         builder: (context, sessionState) {
           final isConnected = context.read<SessionCubit>().isConnectedState(sessionState);
 
-          return SingleChildScrollView(
-            padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 32.h),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (!isConnected) ...[
-                  ActionButtons(isConnected: isConnected),
-                  Gap(32.h),
-                ],
-                if (isConnected) ...[
-                  const ActiveSessionCard(),
-                  Gap(24.h),
-                ],
-                const StorageVaultCard(),
-                Gap(24.h),
-                ConnectionStatusCard(isConnected: isConnected),
-                Gap(24.h),
-                const RecentVelocityCard(),
-                Gap(24.h),
-                DirectCommsCard(isConnected: isConnected),
-              ],
-            ),
+          return Stack(
+            children: [
+              SingleChildScrollView(
+                padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 32.h),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (!isConnected) ...[
+                      ActionButtons(isConnected: isConnected),
+                      Gap(32.h),
+                    ],
+                    if (isConnected) ...[
+                      const ActiveSessionCard(),
+                      Gap(24.h),
+                    ],
+                    const StorageVaultCard(),
+                    Gap(24.h),
+                    ConnectionStatusCard(isConnected: isConnected),
+                    Gap(24.h),
+                    const RecentVelocityCard(),
+                    Gap(24.h),
+                    DirectCommsCard(isConnected: isConnected),
+                  ],
+                ),
+              ),
+              if (sessionState.forceUpdateRequired)
+                const ForceUpdateOverlay(),
+            ],
           );
         },
       ),
