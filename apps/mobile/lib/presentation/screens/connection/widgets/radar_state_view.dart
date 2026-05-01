@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:gap/gap.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:test_mobile/logic/cubits/connection/connection_cubit.dart';
 import 'package:test_mobile/presentation/theme/app_colors.dart';
@@ -42,15 +43,17 @@ class _RadarStateViewState extends State<RadarStateView> with SingleTickerProvid
 
     return Stack(
       children: [
-        Column(
-          children: [
-            Gap(40.h),
-            _buildRadar(context),
-            Gap(20.h),
-            _buildTypography(textTheme),
-            const Spacer(),
-            _buildStatusCard(context, textTheme),
-          ],
+        SingleChildScrollView(
+          child: Column(
+            children: [
+              Gap(40.h),
+              _buildRadar(context),
+              Gap(20.h),
+              _buildTypography(textTheme),
+              Gap(40.h),
+              _buildStatusCard(context, textTheme),
+            ],
+          ),
         ),
         if (!widget.isReceiving && _showScanner) _buildScannerOverlay(context, textTheme),
       ],
@@ -215,6 +218,70 @@ class _RadarStateViewState extends State<RadarStateView> with SingleTickerProvid
                   ),
                 ],
               ),
+              if (widget.isReceiving && state.blePin != null) ...[
+                Gap(20.h),
+                Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.symmetric(vertical: 16.h, horizontal: 5.w),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(24.r),
+                    border: Border.all(color: AppColors.primary.withOpacity(0.15)),
+                  ),
+                  child: Row(
+                    children: [
+                      Gap(16.w),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "SECURE PAIRING",
+                              style: textTheme.labelSmall?.copyWith(
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                            Text(
+                              "Enter this on the sender device",
+                              style: textTheme.bodySmall?.copyWith(
+                                color: AppColors.onSurfaceVariant,
+                                fontSize: 10.sp,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 8.h),
+                        margin: EdgeInsets.only(right: 5.w),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(12.r),
+                          border: Border.all(color: AppColors.primary.withOpacity(0.3), width: 1.5),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.2),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          state.blePin!,
+                          style: GoogleFonts.firaMono(
+                            fontSize: 18.sp,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primary, // Make the text primary color for "glow" effect on dark
+                            letterSpacing: 2,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               Gap(16.h),
               Row(
                 children: [

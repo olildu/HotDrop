@@ -59,12 +59,6 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
           Text("HotDrop", style: GoogleFonts.inter(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 22.sp)),
         ],
       ),
-      actions: [
-        Padding(
-          padding: EdgeInsets.only(right: 20.w),
-          child: Icon(Icons.account_circle_outlined, color: AppColors.onSurface, size: 28.sp),
-        ),
-      ],
     );
   }
 }
