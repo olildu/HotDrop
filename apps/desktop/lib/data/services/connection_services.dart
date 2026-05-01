@@ -16,7 +16,7 @@ void _logConnection(String functionName, String message, {Object? error, StackTr
 }
 
 class DartFunction {
-  Future<void> openPort({
+  Future<int> openPort({
     BuildContext? context,
     VoidCallback? onClientConnected,
     VoidCallback? onClientDisconnected,
@@ -70,8 +70,10 @@ class DartFunction {
           },
         );
       });
+      return globals.tcpServerPort;
     } catch (e) {
       _logConnection('openPort', 'Error opening port', error: e);
+      return 42069; // Fallback
     }
   }
 
