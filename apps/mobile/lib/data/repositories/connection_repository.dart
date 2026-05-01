@@ -10,7 +10,7 @@ class ConnectionRepository {
   final AndroidFunction _hostService = AndroidFunction();
   final ClientServices _clientService = ClientServices();
 
-  Future<Map<String, String>?> hostSession() async {
+  Future<Map<String, dynamic>?> hostSession() async {
     dev.log('Hosting session...', name: 'hostSession');
     return await _hostService.startHosting();
   }
@@ -19,13 +19,15 @@ class ConnectionRepository {
     dev.log('Joining session...', name: 'joinSession');
     try {
       final creds = jsonDecode(rawCredentials);
+      final int? port = creds['tcp_port'];
       if (creds['isDesktop'] == true) {
-        return await _clientService.connectToHostSocket(creds['ip']);
+        return await _clientService.connectToHostSocket(creds['ip'], port: port);
       } else {
         return await _clientService.connectToHostHotspot(
           creds['ssid'],
           creds['password'],
           creds['ip'] ?? "192.168.43.1",
+          port: port,
         );
       }
     } catch (e) {

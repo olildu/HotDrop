@@ -30,7 +30,7 @@ void _logConnection(String functionName, String message, {Object? error, StackTr
 class AndroidFunction {
   static const platform = MethodChannel('com.olildu.hotdrop.wifi_direct/channel');
 
-  Future<Map<String, String>?> startHosting() async {
+  Future<Map<String, dynamic>?> startHosting() async {
     try {
       await WiFiForIoTPlugin.forceWifiUsage(false);
       await WiFiForIoTPlugin.disconnect();
@@ -53,7 +53,12 @@ class AndroidFunction {
         // Generate a random 4-digit PIN for BLE encryption
         final String pin = (1000 + (9000 * (DateTime.now().millisecondsSinceEpoch % 1000) / 1000)).toInt().toString();
         
-        final rawData = {"ssid": ssid, "password": password, "ip": hostIp};
+        final rawData = {
+          "ssid": ssid, 
+          "password": password, 
+          "ip": hostIp,
+          "tcp_port": tcpServerPort,
+        };
         final encryptedPayload = SecurityService().encryptBleData(rawData, pin);
 
         await BlePeripheralService().startAdvertising({"payload": encryptedPayload});
@@ -76,7 +81,7 @@ class AndroidFunction {
 }
 
 class ClientServices {
-  Future<bool> connectToHostHotspot(String ssid, String password, String hostIp, {bool isAuto = false}) async {
+  Future<bool> connectToHostHotspot(String ssid, String password, String hostIp, {int? port, bool isAuto = false}) async {
     try {
       _logConnection('connectToHostHotspot', "Attempting to connect to Hotspot: $ssid (Auto: $isAuto)");
 
@@ -95,7 +100,7 @@ class ClientServices {
         // Wait for DHCP - shorter for auto
         await Future.delayed(Duration(seconds: isAuto ? 2 : 4));
 
-        return await connectToHostSocket(hostIp, isAuto: isAuto);
+        return await connectToHostSocket(hostIp, port: port, isAuto: isAuto);
       } else {
         // FAIL FAST on Auto-reconnect to avoid blocking the app
         if (isAuto) {
@@ -118,7 +123,7 @@ class ClientServices {
           String? currentSsid = await WiFiForIoTPlugin.getSSID();
           if ((currentSsid?.replaceAll('"', '') ?? '') == ssid) {
             await Future.delayed(const Duration(seconds: 2));
-            return await connectToHostSocket(hostIp, isAuto: isAuto);
+            return await connectToHostSocket(hostIp, port: port, isAuto: isAuto);
           }
         }
         return false;
@@ -129,7 +134,8 @@ class ClientServices {
     }
   }
 
-  Future<bool> connectToHostSocket(String hostIp, {bool isAuto = false}) async {
+  Future<bool> connectToHostSocket(String hostIp, {int? port, bool isAuto = false}) async {
+    final int targetPort = port ?? 42069;
     // Reduce retries for background auto-reconnect
     int maxRetries = isAuto ? 2 : 5;
     int retryCount = 0;
@@ -143,12 +149,12 @@ class ClientServices {
         String? gatewayIp = await NetworkInfo().getWifiGatewayIP();
         String targetIp = (gatewayIp != null && gatewayIp != "0.0.0.0") ? gatewayIp : hostIp;
 
-        _logConnection('connectToHostSocket', "Socket Attempt $retryCount: Connecting to $targetIp:42069...");
+        _logConnection('connectToHostSocket', "Socket Attempt $retryCount: Connecting to $targetIp:$targetPort...");
 
         final context = await SecurityService().getClientContext();
         socket = await SecureSocket.connect(
           targetIp,
-          42069,
+          targetPort,
           timeout: const Duration(seconds: 3),
           context: context,
           onBadCertificate: (cert) => true, // Allow self-signed certificates
@@ -237,11 +243,12 @@ class DartFunction {
         final context = await SecurityService().getServerContext();
         _serverSocket = await SecureServerSocket.bind(
           InternetAddress.anyIPv4,
-          port,
+          0,
           context,
           shared: true,
         );
-        _logConnection('startServer', "Secure TCP Server listening on $hostIp:$port");
+        tcpServerPort = _serverSocket!.port;
+        _logConnection('startServer', "Secure TCP Server listening on $hostIp:$tcpServerPort");
 
         _serverSocket!.listen((SecureSocket client) {
           _logConnection('startServer', "New secure connection from ${client.remoteAddress.address}");

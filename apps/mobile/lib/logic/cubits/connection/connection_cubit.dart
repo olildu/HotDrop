@@ -100,7 +100,7 @@ class ConnectionCubit extends Cubit<ConnectionCubitState> {
     if (creds != null) {
       final pin = creds['blePin'];
       // Remove PIN from QR data as scanning doesn't need it
-      final qrMap = Map<String, String>.from(creds)..remove('blePin');
+      final qrMap = Map<String, dynamic>.from(creds)..remove('blePin');
       emit(state.copyWith(qrData: jsonEncode(qrMap), blePin: pin));
     } else {
       emit(state.copyWith(status: ConnectionStatus.error, errorMessage: "Failed to start host"));
