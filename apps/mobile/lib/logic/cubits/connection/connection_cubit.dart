@@ -5,6 +5,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:test_mobile/data/repositories/connection_repository.dart';
 import 'package:test_mobile/data/services/connection_services.dart';
+import 'package:test_mobile/data/services/security_service.dart';
+import 'package:flutter/material.dart';
+import 'package:test_mobile/data/constants/globals.dart';
 
 enum ConnectionStatus { idle, hosting, scanning, connecting, connected, error }
 
@@ -26,20 +29,23 @@ class DiscoveredDevice {
 class ConnectionCubitState {
   final ConnectionStatus status;
   final String? qrData;
+  final String? blePin;
   final String? errorMessage;
   final List<DiscoveredDevice> discoveredDevices;
 
-  ConnectionCubitState({required this.status, this.qrData, this.errorMessage, this.discoveredDevices = const []});
+  ConnectionCubitState({required this.status, this.qrData, this.blePin, this.errorMessage, this.discoveredDevices = const []});
 
   ConnectionCubitState copyWith({
     ConnectionStatus? status,
     String? qrData,
+    String? blePin,
     String? errorMessage,
     List<DiscoveredDevice>? discoveredDevices,
   }) {
     return ConnectionCubitState(
       status: status ?? this.status,
       qrData: qrData ?? this.qrData,
+      blePin: blePin ?? this.blePin,
       errorMessage: errorMessage ?? this.errorMessage,
       discoveredDevices: discoveredDevices ?? this.discoveredDevices,
     );
@@ -92,7 +98,10 @@ class ConnectionCubit extends Cubit<ConnectionCubitState> {
 
     final creds = await _repository.hostSession();
     if (creds != null) {
-      emit(state.copyWith(qrData: Uri.encodeFull(creds.toString())));
+      final pin = creds['blePin'];
+      // Remove PIN from QR data as scanning doesn't need it
+      final qrMap = Map<String, String>.from(creds)..remove('blePin');
+      emit(state.copyWith(qrData: jsonEncode(qrMap), blePin: pin));
     } else {
       emit(state.copyWith(status: ConnectionStatus.error, errorMessage: "Failed to start host"));
     }
@@ -158,6 +167,21 @@ class ConnectionCubit extends Cubit<ConnectionCubitState> {
               String jsonStr = utf8.decode(value);
 
               await device.disconnect();
+              
+              if (jsonStr.startsWith("HP:")) {
+                final pin = await _showPinDialog();
+                if (pin == null) {
+                  emit(state.copyWith(status: ConnectionStatus.error, errorMessage: "PIN required to connect"));
+                  return;
+                }
+                final decrypted = SecurityService().decryptBleData(jsonStr, pin);
+                if (decrypted == null) {
+                  emit(state.copyWith(status: ConnectionStatus.error, errorMessage: "Incorrect PIN"));
+                  return;
+                }
+                jsonStr = jsonEncode(decrypted);
+              }
+
               joinSession(jsonStr); // Join the Wi-Fi network
               return;
             }
@@ -187,6 +211,38 @@ class ConnectionCubit extends Cubit<ConnectionCubitState> {
     _scanSubscription = null;
     _repository.performCleanup();
     FlutterBluePlus.stopScan();
+  }
+
+  Future<String?> _showPinDialog() async {
+    final context = navigatorKey.currentContext;
+    if (context == null) return null;
+
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Enter PIN'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('This device is protected. Enter the 4-digit PIN shown on the other device.'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              decoration: const InputDecoration(labelText: '4-Digit PIN', border: OutlineInputBorder()),
+              keyboardType: TextInputType.number,
+              maxLength: 4,
+              autofocus: true,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('Connect')),
+        ],
+      ),
+    );
   }
 
   @override

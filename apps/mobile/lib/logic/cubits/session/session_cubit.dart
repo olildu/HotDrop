@@ -9,13 +9,23 @@ enum SessionStatus { initializing, idle, connected }
 class SessionState {
   final SessionStatus status;
   final bool isContactsSynced;
+  final bool isPaired;
 
-  SessionState({required this.status, this.isContactsSynced = false});
+  SessionState({
+    required this.status,
+    this.isContactsSynced = false,
+    this.isPaired = false,
+  });
 
-  SessionState copyWith({SessionStatus? status, bool? isContactsSynced}) {
+  SessionState copyWith({
+    SessionStatus? status,
+    bool? isContactsSynced,
+    bool? isPaired,
+  }) {
     return SessionState(
       status: status ?? this.status,
       isContactsSynced: isContactsSynced ?? this.isContactsSynced,
+      isPaired: isPaired ?? this.isPaired,
     );
   }
 }
@@ -53,7 +63,15 @@ class SessionCubit extends Cubit<SessionState> {
 
   void updateConnectionStatus(bool isConnected) {
     dev.log('Updating connection status to isConnected=$isConnected', name: 'updateConnectionStatus');
-    emit(state.copyWith(status: isConnected ? SessionStatus.connected : SessionStatus.idle));
+    emit(state.copyWith(
+      status: isConnected ? SessionStatus.connected : SessionStatus.idle,
+      isPaired: isConnected ? state.isPaired : false, // Reset pairing on disconnect
+    ));
+  }
+
+  void setPaired(bool isPaired) {
+    dev.log('Setting pairing status to $isPaired', name: 'setPaired');
+    emit(state.copyWith(isPaired: isPaired));
   }
 
   void cleanupSession() {

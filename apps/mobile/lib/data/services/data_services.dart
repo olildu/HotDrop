@@ -13,6 +13,8 @@ import 'package:test_mobile/data/repositories/file_repository.dart';
 import 'package:test_mobile/logic/di/injection_container.dart' as di; // Use GetIt
 import 'package:test_mobile/data/services/connection_services.dart';
 import 'package:test_mobile/data/services/file_hosting_services.dart';
+import 'package:test_mobile/logic/cubits/session/session_cubit.dart';
+import 'package:test_mobile/data/constants/globals.dart';
 
 class ReceivedDataParser {
   final FileRepository _fileRepository;
@@ -40,7 +42,27 @@ class ReceivedDataParser {
           final content = parsedData["content"];
           di.sl<ChatRepository>().onMessageReceived(content);
           di.sl<PopupCubit>().show('New message: $content', Icons.message_rounded);
-        } else if (parsedData["type"] == "HotDropFile") {
+        } else if (parsedData["type"] == "pairing_request") {
+          _log('parseData', 'Handling incoming pairing request');
+          _showPairingDialog(parsedData["deviceName"] ?? "Unknown Device");
+        } else if (parsedData["type"] == "pairing_response") {
+          _log('parseData', 'Handling incoming pairing response');
+          if (parsedData["approved"] == true) {
+            di.sl<SessionCubit>().setPaired(true);
+            di.sl<PopupCubit>().complete('Connection Authorized');
+          } else {
+            di.sl<SessionCubit>().setPaired(false);
+            di.sl<PopupCubit>().show('Connection Rejected', Icons.error_outline_rounded);
+          }
+        }
+        
+        // --- Security Gate: Block all other data if not paired ---
+        else if (!di.sl<SessionCubit>().state.isPaired) {
+          _log('parseData', 'Blocking data: Not paired yet');
+          return;
+        }
+
+        else if (parsedData["type"] == "HotDropFile") {
           _log('parseData', 'Handling incoming HotDrop file metadata');
           final fileName = parsedData["name"]?.toString() ?? 'Incoming file';
           di.sl<PopupCubit>().show('Incoming file: $fileName', Icons.download_rounded, progress: 0);
@@ -149,6 +171,44 @@ class ReceivedDataParser {
       _log('_downloadFileFromHost', 'Download error', error: e);
       di.sl<PopupCubit>().hide();
     }
+  }
+
+  void _showPairingDialog(String deviceName) {
+    final context = navigatorKey.currentContext;
+    if (context == null) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Authorize Connection'),
+        content: Text('Allow "$deviceName" to connect and exchange data with this device?'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _sendPairingResponse(false);
+            },
+            child: const Text('Reject', style: TextStyle(color: Colors.red)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              di.sl<SessionCubit>().setPaired(true);
+              _sendPairingResponse(true);
+            },
+            child: const Text('Authorize'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _sendPairingResponse(bool approved) {
+    DartFunction().sendDataToSocket(jsonEncode({
+      "type": "pairing_response",
+      "approved": approved,
+    }));
   }
 }
 

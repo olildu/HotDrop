@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:developer';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -12,6 +13,7 @@ import 'package:test_mobile/presentation/screens/main_screen.dart';
 import 'package:test_mobile/data/services/ble_peripheral_service.dart';
 import 'package:test_mobile/data/services/data_services.dart';
 import 'package:test_mobile/data/services/file_hosting_services.dart';
+import 'package:test_mobile/data/services/security_service.dart';
 import 'package:wifi_iot/wifi_iot.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 
@@ -40,17 +42,23 @@ class AndroidFunction {
       final Map<dynamic, dynamic>? creds = await platform.invokeMethod('startLocalOnlyHotspot');
 
       if (creds != null) {
-        String ssid = creds['ssid'];
-        String password = creds['password'];
+        String ssid = creds['ssid'] ?? "";
+        String password = creds['password'] ?? "";
         _logConnection('startHosting', "Hotspot Started: $ssid");
 
         String hostIp = await FileHostingService().getLocalIpAddress();
 
         await DartFunction().startServer(hostIp);
 
-        final connectionData = {"ssid": ssid, "password": password, "ip": hostIp};
-        await BlePeripheralService().startAdvertising(connectionData);
+        // Generate a random 4-digit PIN for BLE encryption
+        final String pin = (1000 + (9000 * (DateTime.now().millisecondsSinceEpoch % 1000) / 1000)).toInt().toString();
+        
+        final rawData = {"ssid": ssid, "password": password, "ip": hostIp};
+        final encryptedPayload = SecurityService().encryptBleData(rawData, pin);
 
+        await BlePeripheralService().startAdvertising({"payload": encryptedPayload});
+
+        final connectionData = {...rawData, "blePin": pin};
         return connectionData;
       }
     } on PlatformException catch (e) {
@@ -137,11 +145,20 @@ class ClientServices {
 
         _logConnection('connectToHostSocket', "Socket Attempt $retryCount: Connecting to $targetIp:42069...");
 
-        socket = await Socket.connect(targetIp, 42069, timeout: const Duration(seconds: 3));
+        final context = await SecurityService().getClientContext();
+        socket = await SecureSocket.connect(
+          targetIp,
+          42069,
+          timeout: const Duration(seconds: 3),
+          context: context,
+          onBadCertificate: (cert) => true, // Allow self-signed certificates
+        );
         connectedToPort = true;
 
         di.sl<SessionCubit>().updateConnectionStatus(true);
         _logConnection('connectToHostSocket', "Connected to Host Socket!");
+
+        _sendPairingRequest();
 
         socket!.listen(
           (data) {
@@ -184,10 +201,32 @@ class ClientServices {
     }
     return false;
   }
+
+  Future<void> _sendPairingRequest() async {
+    String deviceName = "Unknown Mobile";
+    try {
+      if (Platform.isAndroid) {
+        final info = await DeviceInfoPlugin().androidInfo;
+        deviceName = "${info.manufacturer} ${info.model}";
+      } else if (Platform.isIOS) {
+        final info = await DeviceInfoPlugin().iosInfo;
+        deviceName = info.name;
+      }
+    } catch (e) {
+      deviceName = Platform.localHostname;
+    }
+
+    if (socket != null) {
+      socket!.write(jsonEncode({
+        "type": "pairing_request",
+        "deviceName": deviceName,
+      }) + '\n');
+    }
+  }
 }
 
 class DartFunction {
-  ServerSocket? _serverSocket;
+  dynamic _serverSocket; // Can be ServerSocket or SecureServerSocket
 
   Future<void> startServer(String hostIp, {int port = 42069}) async {
     if (_serverSocket != null) return;
@@ -195,11 +234,17 @@ class DartFunction {
     int retryCount = 0;
     while (retryCount < 5) {
       try {
-        _serverSocket = await ServerSocket.bind(InternetAddress.anyIPv4, port, shared: true);
-        _logConnection('startServer', "TCP Server listening on $hostIp:$port");
+        final context = await SecurityService().getServerContext();
+        _serverSocket = await SecureServerSocket.bind(
+          InternetAddress.anyIPv4,
+          port,
+          context,
+          shared: true,
+        );
+        _logConnection('startServer', "Secure TCP Server listening on $hostIp:$port");
 
-        _serverSocket!.listen((client) {
-          _logConnection('startServer', "New connection from ${client.remoteAddress.address}");
+        _serverSocket!.listen((SecureSocket client) {
+          _logConnection('startServer', "New secure connection from ${client.remoteAddress.address}");
           handleClient(client);
         });
         return;
@@ -224,6 +269,7 @@ class DartFunction {
       (route) => false,
     );
 
+    _sendPairingRequest();
     _sendInitData();
 
     socket!.listen(
@@ -265,6 +311,26 @@ class DartFunction {
         _logConnection('sendDataToSocket', "Send Error", error: e);
       }
     }
+  }
+
+  Future<void> _sendPairingRequest() async {
+    String deviceName = "Unknown Mobile";
+    try {
+      if (Platform.isAndroid) {
+        final info = await DeviceInfoPlugin().androidInfo;
+        deviceName = "${info.manufacturer} ${info.model}";
+      } else if (Platform.isIOS) {
+        final info = await DeviceInfoPlugin().iosInfo;
+        deviceName = info.name;
+      }
+    } catch (e) {
+      deviceName = Platform.localHostname;
+    }
+
+    sendDataToSocket(jsonEncode({
+      "type": "pairing_request",
+      "deviceName": deviceName,
+    }));
   }
 }
 

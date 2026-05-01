@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:developer' as dev;
 import 'dart:io';
 import 'package:test_mobile/data/services/connection_services.dart';
+import 'package:test_mobile/data/services/security_service.dart';
 
 class FileHostingService {
   List<File> _selectedFiles = [];
@@ -16,11 +17,12 @@ class FileHostingService {
     _selectedFiles = files;
     try {
       await _stopHosting();
-      _server = await HttpServer.bind(InternetAddress.anyIPv4, _port);
-      dev.log("Server running on port ${_server!.port}", name: "FileHosting");
+      final context = await SecurityService().getServerContext();
+      _server = await HttpServer.bindSecure(InternetAddress.anyIPv4, _port, context);
+      dev.log("HTTPS Server running on port ${_server!.port}", name: "FileHosting");
 
       final ip = await getLocalIpAddress();
-      _downloadUrls = List.generate(files.length, (index) => 'http://$ip:${_server!.port}/download/$index');
+      _downloadUrls = List.generate(files.length, (index) => 'https://$ip:${_server!.port}/download/$index');
 
       for (int i = 0; i < files.length; i++) {
         DartFunction().sendDataToSocket(
