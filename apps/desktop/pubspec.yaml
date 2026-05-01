@@ -70,6 +70,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_msix: ^0.5.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -112,3 +113,10 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+msix_config:
+  display_name: HotDrop
+  publisher_display_name: Olildu
+  identity_name: com.olildu.hotdrop
+  msix_version: 1.0.0.0
+  logo_path: assets/bin/logo.png # Placeholder path, update if you have an icon
