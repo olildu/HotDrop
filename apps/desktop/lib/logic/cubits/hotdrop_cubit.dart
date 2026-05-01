@@ -201,10 +201,10 @@ class HotdropCubit extends Cubit<HotdropState> {
     const gb = mb * 1024;
     const tb = gb * 1024;
 
-    if (bytes >= tb) return {'value': (bytes / tb).toStringAsFixed(1), 'unit': 'TB'};
-    if (bytes >= gb) return {'value': (bytes / gb).toStringAsFixed(1), 'unit': 'GB'};
-    if (bytes >= mb) return {'value': (bytes / mb).toStringAsFixed(1), 'unit': 'MB'};
-    if (bytes >= kb) return {'value': (bytes / kb).toStringAsFixed(1), 'unit': 'KB'};
+    if (bytes >= tb) return {'value': (bytes / tb).toStringAsFixed(0), 'unit': 'TB'};
+    if (bytes >= gb) return {'value': (bytes / gb).toStringAsFixed(0), 'unit': 'GB'};
+    if (bytes >= mb) return {'value': (bytes / mb).toStringAsFixed(0), 'unit': 'MB'};
+    if (bytes >= kb) return {'value': (bytes / kb).toStringAsFixed(0), 'unit': 'KB'};
     return {'value': bytes.toString(), 'unit': 'B'};
   }
 
@@ -216,10 +216,10 @@ class HotdropCubit extends Cubit<HotdropState> {
     const mb = kb * 1024;
     const gb = mb * 1024;
 
-    if (avgSpeed >= gb) return {'value': (avgSpeed / gb).toStringAsFixed(1), 'unit': 'GB/S'};
-    if (avgSpeed >= mb) return {'value': (avgSpeed / mb).toStringAsFixed(1), 'unit': 'MB/S'};
-    if (avgSpeed >= kb) return {'value': (avgSpeed / kb).toStringAsFixed(1), 'unit': 'KB/S'};
-    return {'value': avgSpeed.toStringAsFixed(1), 'unit': 'B/S'};
+    if (avgSpeed >= gb) return {'value': (avgSpeed / gb).toStringAsFixed(0), 'unit': 'GB/S'};
+    if (avgSpeed >= mb) return {'value': (avgSpeed / mb).toStringAsFixed(0), 'unit': 'MB/S'};
+    if (avgSpeed >= kb) return {'value': (avgSpeed / kb).toStringAsFixed(0), 'unit': 'KB/S'};
+    return {'value': avgSpeed.toStringAsFixed(0), 'unit': 'B/S'};
   }
 
   Future<void> loadExistingFiles({bool loadHistory = false}) async {
