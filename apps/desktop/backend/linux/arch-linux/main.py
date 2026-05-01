@@ -4,6 +4,9 @@ import json
 import tempfile
 import os
 import threading
+import traceback
+import sys
+import sentry_sdk
 
 from bleak import BleakScanner, BleakClient
 
@@ -16,6 +19,12 @@ from gi.repository import GLib
 # ---------------- CONFIG ----------------
 SERVICE_UUID = "0000abcd-0000-1000-8000-00805f9b34fb"
 CHAR_UUID = "0000fffe-0000-1000-8000-00805f9b34fb"
+
+sentry_sdk.init(
+    dsn="https://662b59483acbaaafc82a0c63eddff120@o4511313817436160.ingest.de.sentry.io/4511314046025808",
+    traces_sample_rate=1.0,
+    send_default_pii=True,
+)
 
 # BlueZ Constants
 BLUEZ_SERVICE_NAME = "org.bluez"

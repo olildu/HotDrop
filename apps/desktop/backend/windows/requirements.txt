@@ -1,4 +1,5 @@
 bleak
+sentry-sdk
 llama-cpp-python
 winrt-runtime
 winrt-Windows.Devices.Bluetooth

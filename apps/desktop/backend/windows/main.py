@@ -4,6 +4,9 @@ import json
 import tempfile
 import uuid
 import os
+import traceback
+import sys
+import sentry_sdk
 
 from bleak import BleakScanner, BleakClient
 from winrt.windows.devices.bluetooth.genericattributeprofile import (
@@ -18,6 +21,12 @@ from winrt.windows.storage.streams import DataWriter
 SERVICE_UUID = "0000ABCD-0000-1000-8000-00805F9B34FB"
 CHAR_UUID = "0000FFFE-0000-1000-8000-00805F9B34FB"
 CCCD_UUID = "00002902-0000-1000-8000-00805F9B34FB"
+
+sentry_sdk.init(
+    dsn="https://662b59483acbaaafc82a0c63eddff120@o4511313817436160.ingest.de.sentry.io/4511314046025808",
+    traces_sample_rate=1.0,
+    send_default_pii=True,
+)
 
 BLE_PAYLOAD_STRING = "{}"
 provider = None
