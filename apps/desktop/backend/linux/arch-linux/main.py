@@ -48,13 +48,24 @@ scan_state_lock = asyncio.Lock()
 ble_operation_lock = asyncio.Lock()
 
 def log(msg):
-    temp_dir = tempfile.gettempdir()
-    path = os.path.join(temp_dir, "hotdrop_ble_logs.txt")
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    formatted_msg = f"[{timestamp}] {msg}"
-    with open(path, "a", encoding="utf-8") as f:
-        f.write(formatted_msg + "\n")
-    print(formatted_msg, flush=True)
+    try:
+        temp_dir = tempfile.gettempdir()
+        path = os.path.join(temp_dir, "hotdrop_ble_logs.txt")
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        formatted_msg = f"[{timestamp}] {msg}"
+        
+        try:
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(formatted_msg + "\n")
+        except:
+            pass
+
+        try:
+            print(formatted_msg, flush=True)
+        except OSError:
+            pass
+    except:
+        pass
 
 # ==========================================
 #          LINUX D-BUS GATT SERVER

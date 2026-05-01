@@ -26,13 +26,24 @@ last_activity_time = 0
 WATCHDOG_TIMEOUT = 30.0 # Seconds
 
 def log(msg):
-    temp_dir = tempfile.gettempdir()
-    path = os.path.join(temp_dir, "hotdrop_ble_logs.txt")
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    formatted_msg = f"[{timestamp}] {msg}"
-    with open(path, "a", encoding="utf-8") as f:
-        f.write(formatted_msg + "\n")
-    print(formatted_msg, flush=True)
+    try:
+        temp_dir = tempfile.gettempdir()
+        path = os.path.join(temp_dir, "hotdrop_ble_logs.txt")
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        formatted_msg = f"[{timestamp}] {msg}"
+        
+        try:
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(formatted_msg + "\n")
+        except:
+            pass
+
+        try:
+            print(formatted_msg, flush=True)
+        except OSError:
+            pass
+    except:
+        pass
 
 # --- BLE LOGIC ---- 
 async def start_ble():
