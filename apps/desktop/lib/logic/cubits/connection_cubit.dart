@@ -1,11 +1,13 @@
 import 'dart:convert';
 import 'dart:developer' as dev;
 import 'dart:io';
+import 'package:flutter/material.dart';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:test/logic/constants/globals.dart' as globals;
 import 'package:test/data/services/connection_services.dart';
+import 'package:test/data/services/security_service.dart';
 
 enum ConnectionRole { none, host, join }
 
@@ -18,6 +20,8 @@ class ConnectionState {
   final bool isProcessing;
   final bool isAdminError;
   final bool hostClientConnected;
+  final bool isPaired;
+  final String? blePin;
   final String? qrData;
   final String? currentServerIp;
 
@@ -28,6 +32,8 @@ class ConnectionState {
     this.isProcessing = false,
     this.isAdminError = false,
     this.hostClientConnected = false,
+    this.isPaired = false,
+    this.blePin,
     this.qrData,
     this.currentServerIp,
   });
@@ -39,6 +45,8 @@ class ConnectionState {
     bool? isProcessing,
     bool? isAdminError,
     bool? hostClientConnected,
+    bool? isPaired,
+    String? blePin,
     String? qrData,
     bool clearQrData = false,
     String? currentServerIp,
@@ -50,6 +58,8 @@ class ConnectionState {
       isProcessing: isProcessing ?? this.isProcessing,
       isAdminError: isAdminError ?? this.isAdminError,
       hostClientConnected: hostClientConnected ?? this.hostClientConnected,
+      isPaired: isPaired ?? this.isPaired,
+      blePin: blePin ?? this.blePin,
       qrData: clearQrData ? null : qrData ?? this.qrData,
       currentServerIp: currentServerIp ?? this.currentServerIp,
     );
@@ -146,7 +156,7 @@ class ConnectionCubit extends Cubit<ConnectionState> {
       ),
     );
 
-    final data = await globals.bleInteropService.fetchConnectionData(
+    final dataRaw = await globals.bleInteropService.fetchConnectionData(
       address,
       name,
       (msg) => _log('fetchConnectionData', msg),
@@ -156,11 +166,29 @@ class ConnectionCubit extends Cubit<ConnectionState> {
       return;
     }
 
+    Map<String, dynamic>? data;
+
+    if (dataRaw is Map<String, dynamic>) {
+      data = dataRaw;
+    } else if (dataRaw is String && (dataRaw as String).startsWith("HP:")) {
+      // Encrypted data found! Prompt for PIN
+      final pin = await _showPinDialog();
+      if (pin == null) {
+        emit(state.copyWith(isProcessing: false, loadingStatus: 'Connection cancelled: PIN required.'));
+        return;
+      }
+      data = SecurityService().decryptBleData(dataRaw as String, pin);
+      if (data == null) {
+        emit(state.copyWith(isProcessing: false, loadingStatus: 'Incorrect PIN. Try again.'));
+        return;
+      }
+    }
+
     if (data == null || data['ip'] == null) {
       emit(
         state.copyWith(
           isProcessing: false,
-          loadingStatus: 'Connection Failed: No data received.',
+          loadingStatus: 'Connection Failed: No valid data received.',
         ),
       );
       return;
@@ -253,6 +281,43 @@ class ConnectionCubit extends Cubit<ConnectionState> {
 
   void reset() {
     disconnect();
+  }
+
+  Future<String?> _showPinDialog() async {
+    final context = globals.navigatorKey.currentContext;
+    if (context == null) return null;
+
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Enter PIN'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('This device is protected. Please enter the 4-digit PIN displayed on the other device.'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              decoration: const InputDecoration(labelText: '4-Digit PIN', border: OutlineInputBorder()),
+              keyboardType: TextInputType.number,
+              maxLength: 4,
+              autofocus: true,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('Connect')),
+        ],
+      ),
+    );
+  }
+
+  void setPaired(bool isPaired) {
+    _log('setPaired', 'Setting pairing status to $isPaired');
+    emit(state.copyWith(isPaired: isPaired));
   }
 
   Future<void> _initializeServer() async {
@@ -634,22 +699,29 @@ class ConnectionCubit extends Cubit<ConnectionState> {
 
     final hasHotspot = _hotspotSsid != null && _hotspotPassword != null;
 
-    final qrData = jsonEncode({
+    final rawData = {
       'ip': ipAddress ?? '127.0.0.1',
       'isDesktop': !hasHotspot,
       'ssid': _hotspotSsid,
       'password': _hotspotPassword,
-    });
+    };
+
+    final qrData = jsonEncode(rawData);
+
+    // Generate a 4-digit PIN for BLE encryption
+    final String pin = (1000 + (9000 * (DateTime.now().millisecondsSinceEpoch % 1000) / 1000)).toInt().toString();
+    final encryptedBleData = SecurityService().encryptBleData(rawData, pin);
 
     emit(
       state.copyWith(
         loadingStatus: 'Broadcasting. Waiting for a device to connect...',
         qrData: qrData,
+        blePin: pin,
         currentServerIp: ipAddress,
       ),
     );
 
-    await globals.bleInteropService.startAdvertising(qrData, (msg) => _log('startAdvertising', msg));
+    await globals.bleInteropService.startAdvertising(encryptedBleData, (msg) => _log('startAdvertising', msg));
 
     final context = globals.navigatorKey.currentContext;
     if (context != null) {

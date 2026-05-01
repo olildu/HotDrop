@@ -1,13 +1,15 @@
 import 'dart:io';
+import 'dart:convert';
 import 'dart:developer' as dev;
 import 'package:flutter/material.dart';
 
 import 'package:test/logic/constants/globals.dart' as globals;
 import 'package:test/presentation/screens/main_screen.dart';
 import 'data_services.dart';
+import 'security_service.dart';
 
 Socket? socket;
-ServerSocket? server;
+dynamic server; // Can be ServerSocket or SecureServerSocket
 
 void _logConnection(String functionName, String message, {Object? error, StackTrace? stackTrace}) {
   dev.log(message, name: functionName, error: error, stackTrace: stackTrace);
@@ -26,16 +28,23 @@ class DartFunction {
       await server?.close();
       server = null;
 
-      // FIX: Add shared: true
-      server = await ServerSocket.bind(InternetAddress.anyIPv4, port, shared: true);
-      _logConnection('openPort', 'Server listening on port $port');
+      final securityContext = await SecurityService().getServerContext();
+      server = await SecureServerSocket.bind(
+        InternetAddress.anyIPv4,
+        port,
+        securityContext,
+        shared: true,
+      );
+      _logConnection('openPort', 'Secure server listening on port $port');
 
-      server?.listen((Socket client) {
-        _logConnection('openPort', 'Client connected from ${client.remoteAddress.address}:${client.remotePort}');
+      server?.listen((SecureSocket client) {
+        _logConnection('openPort', 'Secure client connected from ${client.remoteAddress.address}:${client.remotePort}');
         client.setOption(SocketOption.tcpNoDelay, true);
 
         socket = client;
         onClientConnected?.call();
+
+        _sendPairingRequest();
 
         Navigator.pushAndRemoveUntil(context!, MaterialPageRoute(builder: (context) => const MainScreen()), (Route<dynamic> route) => false);
 
@@ -79,11 +88,20 @@ class DartFunction {
   }
 
   Future<void> connectToHost(String ip, {BuildContext? context}) async {
-    _logConnection('connectToHost', 'Connecting to host at $ip:42069');
+    _logConnection('connectToHost', 'Connecting to secure host at $ip:42069');
     try {
-      socket = await Socket.connect(ip, 42069, timeout: const Duration(seconds: 10));
+      final securityContext = await SecurityService().getClientContext();
+      socket = await SecureSocket.connect(
+        ip,
+        42069,
+        timeout: const Duration(seconds: 10),
+        context: securityContext,
+        onBadCertificate: (cert) => true,
+      );
       socket!.setOption(SocketOption.tcpNoDelay, true);
       _navigateToMain(context!);
+
+      _sendPairingRequest();
 
       socket!.listen((data) {
         final rawString = String.fromCharCodes(data);
@@ -121,6 +139,13 @@ class DartFunction {
 
   bool isConnected() {
     return socket != null;
+  }
+
+  void _sendPairingRequest() {
+    sendMessage(jsonEncode({
+      "type": "pairing_request",
+      "deviceName": Platform.localHostname,
+    }));
   }
 }
 

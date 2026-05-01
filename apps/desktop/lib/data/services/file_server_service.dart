@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:developer' as dev;
 import 'package:shelf/shelf_io.dart' as io;
 import 'package:shelf_static/shelf_static.dart';
+import 'security_service.dart';
 
 class FileServerService {
   static HttpServer? _server;
@@ -31,14 +32,15 @@ class FileServerService {
       );
 
       // Use port 8081 for the file transfer
-      _server = await io.serve(handler, InternetAddress.anyIPv4, 8081);
+      final context = await SecurityService().getServerContext();
+      _server = await io.serve(handler, InternetAddress.anyIPv4, 8081, securityContext: context);
 
-      _log('startFileServer', 'File server running at http://${_server!.address.host}:${_server!.port}');
+      _log('startFileServer', 'Secure file server running at https://${_server!.address.host}:${_server!.port}');
       
       // URI encode the filename to handle spaces/special characters
       final encodedName = Uri.encodeComponent(fileName);
-      _log('startFileServer', 'Generated file URL for $fileName');
-      return "http://$ip:8081/$encodedName";
+      _log('startFileServer', 'Generated secure file URL for $fileName');
+      return "https://$ip:8081/$encodedName";
     } catch (e) {
       _log('startFileServer', 'Error starting file server', error: e);
       return null;
