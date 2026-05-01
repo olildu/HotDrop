@@ -12,6 +12,9 @@ class BleInteropService {
   Socket? _hostStreamSocket;
   StreamSubscription<String>? _hostStreamSub;
   int _hostScanSession = 0;
+  Timer? _pingTimer;
+  int _failedPings = 0;
+  bool _isRecovering = false;
 
   static const Duration _bridgeConnectTimeout = Duration(seconds: 5);
 
@@ -86,10 +89,55 @@ class BleInteropService {
       final exePath = await _ensureExecutablePath(_getExePath(log));
       _serverProcess = await Process.start(exePath, []);
       await Future.delayed(const Duration(milliseconds: 500));
+      _startPingService(log);
     } catch (e) {
       _log('_ensureServerRunning', 'Failed to start BLE bridge process', error: e);
       log("Start Error: $e");
     }
+  }
+
+  void _startPingService(Function(String) log) {
+    _pingTimer?.cancel();
+    _failedPings = 0;
+    _pingTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
+      if (_serverProcess == null || _isRecovering) return;
+
+      final res = await _sendCommand("ping", null, (_) {});
+      if (res != null && res['status'] == 'pong') {
+        _failedPings = 0;
+      } else {
+        _failedPings++;
+        _log('_startPingService', 'Ping failed ($_failedPings/3)');
+        if (_failedPings >= 3) {
+          _handleRecovery(log);
+        }
+      }
+    });
+  }
+
+  Future<void> _handleRecovery(Function(String) log) async {
+    if (_isRecovering) return;
+    _isRecovering = true;
+    _log('_handleRecovery', 'Starting bridge recovery...');
+    log("BLE Bridge not responding. Restarting...");
+
+    try {
+      await _stopServerGracefully();
+      _serverProcess?.kill();
+      _serverProcess = null;
+      await Future.delayed(const Duration(seconds: 1));
+      await _ensureServerRunning(log);
+    } catch (e) {
+      _log('_handleRecovery', 'Recovery failed', error: e);
+    } finally {
+      _isRecovering = false;
+    }
+  }
+
+  Future<void> _stopServerGracefully() async {
+    try {
+      await _sendCommand("kill", null, (_) {}).timeout(const Duration(seconds: 2));
+    } catch (_) {}
   }
 
   Future<void> streamAvailableHosts(
@@ -346,11 +394,18 @@ class BleInteropService {
 
   Future<void> dispose() async {
     _log('dispose', 'Disposing BLE interop service resources');
+    _pingTimer?.cancel();
     await stopHostScan();
     await stopAdvertising((_) {});
+    await _stopServerGracefully();
+
     if (_serverProcess != null) {
-      Process.runSync(
-          'taskkill', ['/F', '/T', '/PID', _serverProcess!.pid.toString()]);
+      if (Platform.isWindows) {
+        Process.runSync(
+            'taskkill', ['/F', '/T', '/PID', _serverProcess!.pid.toString()]);
+      } else {
+        _serverProcess!.kill();
+      }
       _serverProcess = null;
     }
 

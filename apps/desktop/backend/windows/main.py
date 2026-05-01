@@ -21,6 +21,7 @@ CCCD_UUID = "00002902-0000-1000-8000-00805F9B34FB"
 
 BLE_PAYLOAD_STRING = "{}"
 provider = None
+shutdown_event = asyncio.Event()
 
 def log(msg):
     temp_dir = tempfile.gettempdir()
@@ -162,6 +163,17 @@ async def handle_client(reader, writer):
         elif command == "connect_to":
             response = await fetch_connection_data(request.get("address"))
 
+        elif command == "ping":
+            response = {"status": "pong"}
+
+        elif command == "kill":
+            log("Kill command received. Shutting down...")
+            shutdown_event.set()
+            response = {"status": "shutting_down"}
+            writer.write(json.dumps(response).encode())
+            await writer.drain()
+            return
+
         writer.write(json.dumps(response).encode())
         await writer.drain()
     except Exception as e:
@@ -172,7 +184,21 @@ async def handle_client(reader, writer):
 async def main():
     server = await asyncio.start_server(handle_client, "127.0.0.1", 8765)
     log("Python Socket server running")
-    async with server: await server.serve_forever()
+    
+    async with server:
+        # Run until shutdown_event is set
+        server_task = asyncio.create_task(server.serve_forever())
+        shutdown_task = asyncio.create_task(shutdown_event.wait())
+        
+        done, pending = await asyncio.wait(
+            [server_task, shutdown_task],
+            return_when=asyncio.FIRST_COMPLETED
+        )
+        
+        for task in pending:
+            task.cancel()
+            
+    log("Python Socket server stopped")
 
 if __name__ == "__main__":
     asyncio.run(main())

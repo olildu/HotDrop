@@ -29,6 +29,7 @@ GATT_SERVICE_IFACE = "org.bluez.GattService1"
 
 BLE_PAYLOAD_STRING = "{}"
 is_ble_running = False
+shutdown_event = asyncio.Event()
 
 # Thread and D-Bus Object References
 glib_mainloop = None
@@ -324,6 +325,17 @@ async def handle_client(reader, writer):
             await stop_active_scan("connect_to request")
             async with ble_operation_lock:
                 response = await fetch_connection_data(request.get("address"))
+
+        elif command == "ping":
+            response = {"status": "pong"}
+
+        elif command == "kill":
+            log("Kill command received. Shutting down...")
+            shutdown_event.set()
+            response = {"status": "shutting_down"}
+            writer.write(json.dumps(response).encode())
+            await writer.drain()
+            return
         
         else:
             response = {"status": "error", "message": "Unknown command"}
@@ -342,8 +354,21 @@ async def handle_client(reader, writer):
 async def main():
     server = await asyncio.start_server(handle_client, "127.0.0.1", 8765)
     log("Main BLE Service running on port 8765")
-    async with server: 
-        await server.serve_forever()
+    
+    async with server:
+        server_task = asyncio.create_task(server.serve_forever())
+        shutdown_task = asyncio.create_task(shutdown_event.wait())
+        
+        done, pending = await asyncio.wait(
+            [server_task, shutdown_task],
+            return_when=asyncio.FIRST_COMPLETED
+        )
+        
+        for task in pending:
+            task.cancel()
+            
+    stop_ble()
+    log("Main BLE Service stopped")
 
 if __name__ == "__main__":
     asyncio.run(main())
