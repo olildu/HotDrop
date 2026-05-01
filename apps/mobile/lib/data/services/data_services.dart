@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_contacts/contact.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:test_mobile/logic/cubits/hotdrop_cubit.dart'; // Required for progress updates
 import 'package:test_mobile/logic/cubits/popup_cubit.dart';
@@ -116,7 +117,13 @@ class ReceivedDataParser {
     try {
       final stopwatch = Stopwatch()..start();
       final request = http.Request('GET', Uri.parse(url));
-      final response = await http.Client().send(request);
+      
+      // Configure client to allow self-signed certificates
+      final httpClient = HttpClient()
+        ..badCertificateCallback = ((X509Certificate cert, String host, int port) => true);
+      final ioClient = IOClient(httpClient);
+      
+      final response = await ioClient.send(request);
 
       if (response.statusCode == 200) {
         final directory = await getApplicationDocumentsDirectory();

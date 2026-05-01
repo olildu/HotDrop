@@ -3,6 +3,7 @@ import 'dart:developer' as dev;
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
 import 'package:test/logic/injection_container.dart';
 import 'package:test/logic/cubits/popup_cubit.dart';
 import 'package:test/data/services/common_functions.dart';
@@ -22,7 +23,13 @@ class HttpFunctions {
     try {
       final stopwatch = Stopwatch()..start();
       final request = http.Request('GET', Uri.parse(url));
-      final response = await http.Client().send(request);
+      
+      // Configure client to allow self-signed certificates
+      final httpClient = HttpClient()
+        ..badCertificateCallback = ((X509Certificate cert, String host, int port) => true);
+      final ioClient = IOClient(httpClient);
+      
+      final response = await ioClient.send(request);
 
       if (response.statusCode == 200) {
         final nDropDir = await CommonFunctions().getHotDropDirectory();
