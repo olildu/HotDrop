@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'dart:developer' as dev;
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 class BleInteropService {
   Process? _serverProcess;
@@ -58,8 +59,13 @@ class BleInteropService {
       return sourcePath;
     }
 
-    final tempDir = await Directory.systemTemp.createTemp('hotdrop_ble_');
-    final stagedPath = p.join(tempDir.path, p.basename(sourcePath));
+    final supportDir = await getApplicationSupportDirectory();
+    final stagingDir = Directory(p.join(supportDir.path, 'bin'));
+    if (!await stagingDir.exists()) {
+      await stagingDir.create(recursive: true);
+    }
+
+    final stagedPath = p.join(stagingDir.path, p.basename(sourcePath));
     await sourceFile.copy(stagedPath);
 
     final chmodResult = await Process.run('chmod', ['+x', stagedPath]);
