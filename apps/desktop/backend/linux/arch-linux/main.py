@@ -6,6 +6,7 @@ import os
 import threading
 import traceback
 import sys
+import argparse
 import sentry_sdk
 
 from bleak import BleakScanner, BleakClient
@@ -393,8 +394,12 @@ async def main():
     global last_activity_time
     last_activity_time = asyncio.get_event_loop().time()
     
-    server = await asyncio.start_server(handle_client, "127.0.0.1", 8765)
-    log("Main BLE Service running on port 8765")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--port", type=int, default=8765)
+    args = parser.parse_args()
+    
+    server = await asyncio.start_server(handle_client, "127.0.0.1", args.port)
+    log(f"Main BLE Service running on port {args.port}")
     
     async with server:
         server_task = asyncio.create_task(server.serve_forever())

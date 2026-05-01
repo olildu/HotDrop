@@ -690,25 +690,40 @@ class ConnectionCubit extends Cubit<ConnectionState> {
 
   Future<void> _getHostInfo() async {
     final ipAddress = await _getBestIpAddress();
+    final context = globals.navigatorKey.currentContext;
 
-    if (isClosed) {
+    if (isClosed || context == null) {
       return;
     }
 
-    globals.currentServerIp = ipAddress;
+    // 1. Bind the port FIRST so we know what port to broadcast
+    final boundPort = await DartFunction().openPort(
+      context: context,
+      onClientConnected: () {
+        _log('openPort.onClientConnected', 'Client connected to host');
+        if (isClosed) return;
+        emit(state.copyWith(hostClientConnected: true, loadingStatus: 'Peer connected.'));
+      },
+      onClientDisconnected: () {
+        _log('openPort.onClientDisconnected', 'Client disconnected from host');
+        if (isClosed) return;
+        emit(state.copyWith(hostClientConnected: false, loadingStatus: 'Broadcasting. Waiting for a device to connect...'));
+      },
+    );
 
+    globals.currentServerIp = ipAddress;
     final hasHotspot = _hotspotSsid != null && _hotspotPassword != null;
 
+    // 2. Generate data with the ACTUAL bound port
     final rawData = {
       'ip': ipAddress ?? '127.0.0.1',
       'isDesktop': !hasHotspot,
       'ssid': _hotspotSsid,
       'password': _hotspotPassword,
+      'tcp_port': boundPort,
     };
 
     final qrData = jsonEncode(rawData);
-
-    // Generate a 4-digit PIN for BLE encryption
     final String pin = (1000 + (9000 * (DateTime.now().millisecondsSinceEpoch % 1000) / 1000)).toInt().toString();
     final encryptedBleData = SecurityService().encryptBleData(rawData, pin);
 
@@ -721,39 +736,7 @@ class ConnectionCubit extends Cubit<ConnectionState> {
       ),
     );
 
+    // 3. Start advertising the correct data
     await globals.bleInteropService.startAdvertising(encryptedBleData, (msg) => _log('startAdvertising', msg));
-
-    final context = globals.navigatorKey.currentContext;
-    if (context != null) {
-      DartFunction().openPort(
-        context: context,
-        onClientConnected: () {
-          _log('openPort.onClientConnected', 'Client connected to host');
-          if (isClosed) {
-            return;
-          }
-
-          emit(
-            state.copyWith(
-              hostClientConnected: true,
-              loadingStatus: 'Peer connected.',
-            ),
-          );
-        },
-        onClientDisconnected: () {
-          _log('openPort.onClientDisconnected', 'Client disconnected from host');
-          if (isClosed) {
-            return;
-          }
-
-          emit(
-            state.copyWith(
-              hostClientConnected: false,
-              loadingStatus: 'Broadcasting. Waiting for a device to connect...',
-            ),
-          );
-        },
-      );
-    }
   }
 }

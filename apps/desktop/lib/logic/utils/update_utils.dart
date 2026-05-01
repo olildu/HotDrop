@@ -14,6 +14,6 @@ class UpdateUtils {
     await autoUpdater.setScheduledCheckInterval(3600); // Check every hour
     
     // Check for updates immediately on launch
-    await autoUpdater.checkForUpdates(silent: true);
+    await autoUpdater.checkForUpdates();
   }
 }

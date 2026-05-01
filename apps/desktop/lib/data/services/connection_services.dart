@@ -16,13 +16,12 @@ void _logConnection(String functionName, String message, {Object? error, StackTr
 }
 
 class DartFunction {
-  Future<void> openPort({
+  Future<int> openPort({
     BuildContext? context,
     VoidCallback? onClientConnected,
     VoidCallback? onClientDisconnected,
   }) async {
-    const int port = 42069;
-    _logConnection('openPort', 'Opening TCP server on port $port');
+    _logConnection('openPort', 'Opening TCP server on dynamic port');
     try {
       // FIX: Close any existing server before starting a new one
       await server?.close();
@@ -31,11 +30,12 @@ class DartFunction {
       final securityContext = await SecurityService().getServerContext();
       server = await SecureServerSocket.bind(
         InternetAddress.anyIPv4,
-        port,
+        0,
         securityContext,
         shared: true,
       );
-      _logConnection('openPort', 'Secure server listening on port $port');
+      globals.tcpServerPort = server!.port;
+      _logConnection('openPort', 'Secure server listening on port ${globals.tcpServerPort}');
 
       server?.listen((SecureSocket client) {
         _logConnection('openPort', 'Secure client connected from ${client.remoteAddress.address}:${client.remotePort}');
@@ -70,8 +70,10 @@ class DartFunction {
           },
         );
       });
+      return globals.tcpServerPort;
     } catch (e) {
       _logConnection('openPort', 'Error opening port', error: e);
+      return 42069; // Fallback
     }
   }
 
@@ -87,13 +89,14 @@ class DartFunction {
     Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const MainScreen()), (r) => false);
   }
 
-  Future<void> connectToHost(String ip, {BuildContext? context}) async {
-    _logConnection('connectToHost', 'Connecting to secure host at $ip:42069');
+  Future<void> connectToHost(String ip, {int? port, BuildContext? context}) async {
+    final int targetPort = port ?? 42069;
+    _logConnection('connectToHost', 'Connecting to secure host at $ip:$targetPort');
     try {
       final securityContext = await SecurityService().getClientContext();
       socket = await SecureSocket.connect(
         ip,
-        42069,
+        targetPort,
         timeout: const Duration(seconds: 10),
         context: securityContext,
         onBadCertificate: (cert) => true,

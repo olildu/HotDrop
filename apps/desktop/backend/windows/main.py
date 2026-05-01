@@ -6,6 +6,7 @@ import uuid
 import os
 import traceback
 import sys
+import argparse
 import sentry_sdk
 
 from bleak import BleakScanner, BleakClient
@@ -222,8 +223,12 @@ async def main():
     global last_activity_time
     last_activity_time = asyncio.get_event_loop().time()
     
-    server = await asyncio.start_server(handle_client, "127.0.0.1", 8765)
-    log("Python Socket server running")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--port", type=int, default=8765)
+    args = parser.parse_args()
+    
+    server = await asyncio.start_server(handle_client, "127.0.0.1", args.port)
+    log(f"Python Socket server running on port {args.port}")
     
     async with server:
         # Run until shutdown_event is set
