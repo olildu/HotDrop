@@ -1,5 +1,7 @@
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -20,33 +22,44 @@ import 'logic/cubits/hotdrop_cubit.dart';
 import 'logic/cubits/popup_cubit.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  await SentryFlutter.init(
+    (options) {
+      options.dsn = 'https://cad7fdad3d7e76d5c49a24ed0b06018c@o4511313817436160.ingest.de.sentry.io/4511313827266640';
+      options.maxCacheItems = 50;
+      options.compressPayload = true;
+      options.enableAutoPerformanceTracing = true;
+      options.tracesSampleRate = 1.0;
+    },
+    appRunner: () async {
+      WidgetsFlutterBinding.ensureInitialized();
 
-  assert(() {
-    debugPaintBaselinesEnabled = false;
-    return true;
-  }());
+      assert(() {
+        debugPaintBaselinesEnabled = false;
+        return true;
+      }());
 
-  // 1. Initialize Dependency Injection Container
-  await di.init();
+      // 1. Initialize Dependency Injection Container
+      await di.init();
 
-  // 2. Perform startup cleanup
-  hardCleanupOnStartup();
+      // 2. Perform startup cleanup
+      hardCleanupOnStartup();
 
-  runApp(
-    // 3. Replace MultiProvider with MultiBlocProvider
-    MultiBlocProvider(
-      providers: [
-        BlocProvider(create: (_) => di.sl<AppLifecycleCubit>()),
-        BlocProvider(create: (_) => di.sl<ConnectionCubit>()),
-        BlocProvider(create: (_) => di.sl<MessageCubit>()),
-        BlocProvider(create: (_) => di.sl<ContactCubit>()),
-        BlocProvider(create: (_) => di.sl<ContactUiCubit>()),
-        BlocProvider(create: (_) => di.sl<HotdropCubit>()),
-        BlocProvider(create: (_) => di.sl<PopupCubit>()),
-      ],
-      child: const DesktopSide(),
-    ),
+      runApp(
+        // 3. Replace MultiProvider with MultiBlocProvider
+        MultiBlocProvider(
+          providers: [
+            BlocProvider(create: (_) => di.sl<AppLifecycleCubit>()),
+            BlocProvider(create: (_) => di.sl<ConnectionCubit>()),
+            BlocProvider(create: (_) => di.sl<MessageCubit>()),
+            BlocProvider(create: (_) => di.sl<ContactCubit>()),
+            BlocProvider(create: (_) => di.sl<ContactUiCubit>()),
+            BlocProvider(create: (_) => di.sl<HotdropCubit>()),
+            BlocProvider(create: (_) => di.sl<PopupCubit>()),
+          ],
+          child: const DesktopSide(),
+        ),
+      );
+    },
   );
 }
 

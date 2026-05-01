@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:developer' as dev;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 
 class BleInteropService {
   Process? _serverProcess;
@@ -88,6 +89,18 @@ class BleInteropService {
       _log('_ensureServerRunning', 'Starting BLE bridge process');
       final exePath = await _ensureExecutablePath(_getExePath(log));
       _serverProcess = await Process.start(exePath, []);
+      
+      // Monitor stderr for crashes
+      _serverProcess!.stderr.transform(utf8.decoder).listen((error) {
+        if (error.isNotEmpty) {
+          _log('_ensureServerRunning', 'Python Error: $error');
+          Sentry.captureException(
+            error,
+            hint: Hint.withMap({'type': 'sidecar_crash'}),
+          );
+        }
+      });
+
       await Future.delayed(const Duration(milliseconds: 500));
       _startPingService(log);
     } catch (e) {

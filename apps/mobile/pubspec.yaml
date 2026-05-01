@@ -52,6 +52,7 @@ dependencies:
   qr_flutter: ^4.1.0
   mobile_scanner: ^7.2.0
   google_fonts: ^8.0.2
+  sentry_flutter: ^8.11.0
   network_info_plus: ^7.0.0
   open_filex: ^4.7.0
   flutter_blue_plus: ^2.2.1

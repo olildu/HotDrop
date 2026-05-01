@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:test_mobile/logic/cubits/connection/connection_cubit.dart';
@@ -17,26 +18,35 @@ import 'package:test_mobile/data/services/connection_services.dart';
 import 'package:test_mobile/presentation/widgets/transfer_popup_overlay.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await di.init();
-  await Permissions().requestPermissions();
+  await SentryFlutter.init(
+    (options) {
+      options.dsn = 'https://cad7fdad3d7e76d5c49a24ed0b06018c@o4511313817436160.ingest.de.sentry.io/4511313827266640';
+      options.maxCacheItems = 50;
+      options.tracesSampleRate = 1.0;
+    },
+    appRunner: () async {
+      WidgetsFlutterBinding.ensureInitialized();
+      await di.init();
+      await Permissions().requestPermissions();
 
-  runApp(
-    MultiBlocProvider(
-      providers: [
-        BlocProvider(create: (context) => di.sl<SessionCubit>()..initializeApp()),
-        BlocProvider(create: (context) => di.sl<MessageCubit>()),
-        BlocProvider(
-          create: (context) => FileDetailCubit(di.sl<FileRepository>())..loadFileDetails(),
+      runApp(
+        MultiBlocProvider(
+          providers: [
+            BlocProvider(create: (context) => di.sl<SessionCubit>()..initializeApp()),
+            BlocProvider(create: (context) => di.sl<MessageCubit>()),
+            BlocProvider(
+              create: (context) => FileDetailCubit(di.sl<FileRepository>())..loadFileDetails(),
+            ),
+            BlocProvider(
+              create: (context) => ConnectionCubit(di.sl<ConnectionRepository>()),
+            ),
+            BlocProvider(create: (context) => di.sl<HotDropCubit>()),
+            BlocProvider(create: (context) => di.sl<PopupCubit>()),
+          ],
+          child: const MyApp(),
         ),
-        BlocProvider(
-          create: (context) => ConnectionCubit(di.sl<ConnectionRepository>()),
-        ),
-        BlocProvider(create: (context) => di.sl<HotDropCubit>()),
-        BlocProvider(create: (context) => di.sl<PopupCubit>()),
-      ],
-      child: const MyApp(),
-    ),
+      );
+    },
   );
 }
 
