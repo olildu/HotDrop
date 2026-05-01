@@ -15,8 +15,8 @@ import '../data/services/ble_interop_service.dart';
 final sl = GetIt.instance;
 
 Future<void> init() async {
-  sl.registerFactory(() => AppLifecycleCubit(sl()));
-  sl.registerFactory(() => ConnectionCubit());
+  sl.registerLazySingleton(() => AppLifecycleCubit(sl()));
+  sl.registerLazySingleton(() => ConnectionCubit());
   sl.registerLazySingleton(() => MessageCubit(sl()));
   sl.registerLazySingleton(() => ContactCubit());
   sl.registerFactory(() => ContactUiCubit());

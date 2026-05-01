@@ -124,15 +124,64 @@ class _MainScreenReceiveViewState extends State<MainScreenReceiveView> with Sing
                                     style: TextStyle(color: Colors.grey, fontSize: 16.sp),
                                     children: [
                                       TextSpan(
-                                        text: 'HotDrop Node: $hostName.\n',
+                                        text: hostName,
                                         style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                                       ),
-                                      const TextSpan(text: 'Make sure your WiFi and Bluetooth are active.'),
+                                      const TextSpan(text: '. Make sure your WiFi and Bluetooth are active.'),
                                     ],
                                   ),
                                   textAlign: TextAlign.center,
                                 ),
                                 Gap(60.h),
+
+                                // PIN Display
+                                if (state.blePin != null && !state.isPaired) ...[
+                                  Container(
+                                    padding: EdgeInsets.symmetric(horizontal: 32.w, vertical: 16.h),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.surfaceContainerHigh.withValues(alpha: 0.5),
+                                      borderRadius: BorderRadius.circular(20.r),
+                                      border: Border.all(
+                                        color: AppColors.primaryContainer.withValues(alpha: 0.2),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'SECURITY PIN',
+                                              style: TextStyle(
+                                                color: AppColors.primaryContainer,
+                                                fontSize: 10.sp,
+                                                fontWeight: FontWeight.bold,
+                                                letterSpacing: 2,
+                                              ),
+                                            ),
+                                            Text(
+                                              'Confirm on sender',
+                                              style: TextStyle(color: Colors.grey, fontSize: 10.sp),
+                                            ),
+                                          ],
+                                        ),
+                                        Gap(40.w),
+                                        Text(
+                                          state.blePin!,
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 36.sp,
+                                            fontWeight: FontWeight.w900,
+                                            letterSpacing: 6,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Gap(50.h),
+                                ],
 
                                 // Loading Status
                                 Row(
