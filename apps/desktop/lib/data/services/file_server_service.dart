@@ -3,6 +3,7 @@ import 'dart:developer' as dev;
 import 'package:shelf/shelf_io.dart' as io;
 import 'package:shelf_static/shelf_static.dart';
 import 'security_service.dart';
+import 'firewall_service.dart';
 import 'package:test/logic/constants/globals.dart' as globals;
 
 class FileServerService {
@@ -32,13 +33,22 @@ class FileServerService {
         defaultDocument: fileName
       );
 
-      // Use port 0 for dynamic binding
       final context = await SecurityService().getServerContext();
-      _server = await io.serve(handler, InternetAddress.anyIPv4, 0, securityContext: context);
+      
+      try {
+        _log('startFileServer', 'Attempting to bind to primary file server port 42070');
+        _server = await io.serve(handler, InternetAddress.anyIPv4, 42070, securityContext: context);
+      } catch (e) {
+        _log('startFileServer', 'Primary file server port 42070 is unavailable, binding to a random port');
+        _server = await io.serve(handler, InternetAddress.anyIPv4, 0, securityContext: context);
+      }
       
       globals.httpPort = _server!.port;
 
       _log('startFileServer', 'Secure file server running at https://${_server!.address.host}:${_server!.port}');
+      
+      // Ensure firewall rules are set for the file server port
+      await FirewallService().ensureRules(port: globals.httpPort);
       
       // URI encode the filename to handle spaces/special characters
       final encodedName = Uri.encodeComponent(fileName);

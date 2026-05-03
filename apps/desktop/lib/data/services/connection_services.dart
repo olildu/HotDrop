@@ -21,19 +21,32 @@ class DartFunction {
     VoidCallback? onClientConnected,
     VoidCallback? onClientDisconnected,
   }) async {
-    _logConnection('openPort', 'Opening TCP server on dynamic port');
+    _logConnection('openPort', 'Opening TCP server');
     try {
       // FIX: Close any existing server before starting a new one
       await server?.close();
       server = null;
 
       final securityContext = await SecurityService().getServerContext();
-      server = await SecureServerSocket.bind(
-        InternetAddress.anyIPv4,
-        0,
-        securityContext,
-        shared: true,
-      );
+      
+      try {
+        _logConnection('openPort', 'Attempting to bind to primary port 42069');
+        server = await SecureServerSocket.bind(
+          InternetAddress.anyIPv4,
+          42069,
+          securityContext,
+          shared: true,
+        );
+      } catch (e) {
+        _logConnection('openPort', 'Primary port 42069 is unavailable, binding to a random port');
+        server = await SecureServerSocket.bind(
+          InternetAddress.anyIPv4,
+          0,
+          securityContext,
+          shared: true,
+        );
+      }
+
       globals.tcpServerPort = server!.port;
       _logConnection('openPort', 'Secure server listening on port ${globals.tcpServerPort}');
 
@@ -171,7 +184,7 @@ void shutdownHotspotSync() {
           \$netTask = \$asTask.Invoke(\$null, @(\$WinRtTask))
           \$netTask.Wait(-1) | Out-Null
       }
-
+ 
       \$connectionProfile = [Windows.Networking.Connectivity.NetworkInformation,Windows.Networking.Connectivity,ContentType=WindowsRuntime]::GetInternetConnectionProfile()
       
       if (\$null -ne \$connectionProfile) {

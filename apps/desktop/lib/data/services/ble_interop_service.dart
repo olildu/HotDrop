@@ -27,16 +27,12 @@ class BleInteropService {
 
   Future<String> _getExePath(Function(String) log) async {
     _log('_getExePath', 'Resolving BLE bridge executable path');
-    final String executableName =
-        Platform.isWindows ? 'HotDropBLE.exe' : 'HotDropBLE';
-    final String fallbackName =
-        Platform.isWindows ? 'HotDropBLE' : 'HotDropBLE.exe';
+    final String executableName = Platform.isWindows ? 'HotDropBLE.exe' : 'HotDropBLE';
+    final String fallbackName = Platform.isWindows ? 'HotDropBLE' : 'HotDropBLE.exe';
 
     String baseDir = p.dirname(Platform.resolvedExecutable);
-    String prodPath = p.join(
-        baseDir, 'data', 'flutter_assets', 'assets', 'bin', executableName);
-    String prodFallbackPath = p.join(
-        baseDir, 'data', 'flutter_assets', 'assets', 'bin', fallbackName);
+    String prodPath = p.join(baseDir, 'data', 'flutter_assets', 'assets', 'bin', executableName);
+    String prodFallbackPath = p.join(baseDir, 'data', 'flutter_assets', 'assets', 'bin', fallbackName);
 
     if (File(prodPath).existsSync()) return prodPath;
     if (File(prodFallbackPath).existsSync()) return prodFallbackPath;
@@ -92,10 +88,10 @@ class BleInteropService {
       _log('_ensureServerRunning', 'Starting BLE bridge process');
       final sourcePath = await _getExePath(log);
       final exePath = await _ensureExecutablePath(sourcePath, log);
-      
+
       _ipcPort = await _findFreePort();
       _serverProcess = await Process.start(exePath, ["--port", _ipcPort.toString()]);
-      
+
       // Monitor stderr for crashes
       _serverProcess!.stderr.transform(utf8.decoder).listen((error) {
         if (error.isNotEmpty) {
@@ -116,10 +112,10 @@ class BleInteropService {
         await _stopServerGracefully();
         _serverProcess?.kill();
         _serverProcess = null;
-        
+
         // Forced re-stage
         await _stageBinary(sourcePath);
-        
+
         // Final attempt
         _serverProcess = await Process.start(exePath, ["--port", _ipcPort.toString()]);
         await Future.delayed(const Duration(milliseconds: 1000));
@@ -135,7 +131,7 @@ class BleInteropService {
   void _startPingService(Function(String) log) {
     _pingTimer?.cancel();
     _failedPings = 0;
-    _pingTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
+    _pingTimer = Timer.periodic(const Duration(seconds: 20), (timer) async {
       if (_serverProcess == null || _isRecovering) return;
 
       final res = await _sendCommand("ping", null, (_) {});
@@ -194,11 +190,7 @@ class BleInteropService {
       socket.write(jsonEncode(payload));
 
       // Listen to the stream line by line
-      _hostStreamSub = socket
-          .cast<List<int>>()
-          .transform(utf8.decoder)
-          .transform(const LineSplitter())
-          .listen(
+      _hostStreamSub = socket.cast<List<int>>().transform(utf8.decoder).transform(const LineSplitter()).listen(
         (String line) {
           if (sessionId != _hostScanSession) {
             return;
@@ -259,12 +251,10 @@ class BleInteropService {
     _hostStreamSocket = null;
   }
 
-  Future<Map<String, dynamic>?> _sendCommand(
-      String cmd, Map<String, dynamic>? extras, Function(String) log) async {
+  Future<Map<String, dynamic>?> _sendCommand(String cmd, Map<String, dynamic>? extras, Function(String) log) async {
     _log('_sendCommand', 'Sending bridge command: $cmd');
     try {
-      final socket = await Socket.connect('127.0.0.1', _ipcPort)
-          .timeout(_bridgeConnectTimeout);
+      final socket = await Socket.connect('127.0.0.1', _ipcPort).timeout(_bridgeConnectTimeout);
 
       final Map<String, dynamic> payload = {"command": cmd};
 
@@ -274,8 +264,7 @@ class BleInteropService {
 
       socket.write(jsonEncode(payload));
 
-      final response =
-          await socket.cast<List<int>>().transform(utf8.decoder).join();
+      final response = await socket.cast<List<int>>().transform(utf8.decoder).join();
       socket.destroy();
       _log('_sendCommand', 'Received response for command: $cmd');
 
@@ -295,16 +284,11 @@ class BleInteropService {
     final completer = Completer<String?>();
 
     try {
-      final socket = await Socket.connect('127.0.0.1', _ipcPort)
-          .timeout(_bridgeConnectTimeout);
+      final socket = await Socket.connect('127.0.0.1', _ipcPort).timeout(_bridgeConnectTimeout);
       socket.write(jsonEncode({"command": "stream_hosts"}));
 
       late StreamSubscription<String> sub;
-      sub = socket
-          .cast<List<int>>()
-          .transform(utf8.decoder)
-          .transform(const LineSplitter())
-          .listen(
+      sub = socket.cast<List<int>>().transform(utf8.decoder).transform(const LineSplitter()).listen(
         (line) async {
           try {
             final data = jsonDecode(line);
@@ -368,9 +352,7 @@ class BleInteropService {
     _log('getAvailableHosts', 'Fetching available hosts');
     await _ensureServerRunning(log);
     final res = await _sendCommand("list_hosts", null, log);
-    return (res != null && res['status'] == 'success')
-        ? res['hosts'] as List<dynamic>
-        : [];
+    return (res != null && res['status'] == 'success') ? res['hosts'] as List<dynamic> : [];
   }
 
   Future<Map<String, dynamic>?> fetchConnectionData(
@@ -399,8 +381,7 @@ class BleInteropService {
     }
 
     log('Retrying connect_to with refreshed address: $refreshedAddress');
-    final retry =
-        await _sendCommand("connect_to", {"address": refreshedAddress}, log);
+    final retry = await _sendCommand("connect_to", {"address": refreshedAddress}, log);
     if (retry != null && retry['status'] == 'success' && retry['data'] is Map) {
       return Map<String, dynamic>.from(retry['data']);
     }
@@ -437,8 +418,7 @@ class BleInteropService {
 
     if (_serverProcess != null) {
       if (Platform.isWindows) {
-        Process.runSync(
-            'taskkill', ['/F', '/T', '/PID', _serverProcess!.pid.toString()]);
+        Process.runSync('taskkill', ['/F', '/T', '/PID', _serverProcess!.pid.toString()]);
       } else {
         _serverProcess!.kill();
       }

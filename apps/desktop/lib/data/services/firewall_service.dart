@@ -7,12 +7,50 @@ class FirewallService {
   factory FirewallService() => _instance;
   FirewallService._internal();
 
-  Future<void> ensureRules() async {
+  // Track ports we've already configured to avoid redundant pkexec prompts
+  final Set<int> _configuredPorts = {};
+  
+  // Prevent concurrent configuration runs
+  Future<void>? _ongoingConfiguration;
+
+  Future<void> ensureRules({int? port}) async {
+    if (port != null) {
+      await ensureRulesForPorts([port]);
+    } else {
+      await ensureRulesForPorts([42069]); // Default port
+    }
+  }
+
+  void markPortsAsConfigured(List<int> ports) {
+    _configuredPorts.addAll(ports);
+    dev.log('Ports ${ports.join(', ')} marked as configured.', name: 'FirewallService');
+  }
+
+  Future<void> ensureRulesForPorts(List<int> ports) async {
+    // If there's an ongoing configuration, wait for it
+    if (_ongoingConfiguration != null) {
+      await _ongoingConfiguration;
+    }
+
+    // After waiting, check again if we still need to configure anything
+    final portsToConfigure = ports.where((p) => !_configuredPorts.contains(p)).toList();
+    if (portsToConfigure.isEmpty) return;
+
+    _ongoingConfiguration = _executeConfiguration(portsToConfigure);
+    try {
+      await _ongoingConfiguration;
+    } finally {
+      _ongoingConfiguration = null;
+    }
+  }
+
+  Future<void> _executeConfiguration(List<int> portsToConfigure) async {
     if (Platform.isWindows) {
       await _setupWindowsFirewall();
     } else if (Platform.isLinux) {
-      await _setupLinuxFirewall();
+      await _setupLinuxFirewall(ports: portsToConfigure);
     }
+    _configuredPorts.addAll(portsToConfigure);
   }
 
   Future<void> _setupWindowsFirewall() async {
@@ -47,22 +85,42 @@ class FirewallService {
     }
   }
 
-  Future<void> _setupLinuxFirewall() async {
+  Future<void> _setupLinuxFirewall({required List<int> ports}) async {
     try {
       // Find the bundled script
       final String baseDir = p.dirname(Platform.resolvedExecutable);
-      final String scriptPath = p.join(baseDir, 'data', 'flutter_assets', 'assets', 'bin', 'setup-firewall.sh');
       
+      // Production path (bundled app)
+      String scriptPath = p.join(baseDir, 'data', 'flutter_assets', 'assets', 'bin', 'setup-firewall.sh');
+      
+      // Development path fallback
       if (!File(scriptPath).existsSync()) {
-        dev.log('Firewall script not found at $scriptPath', name: 'FirewallService');
-        return;
+        final String debugPath = p.join(baseDir, 'assets', 'bin', 'setup-firewall.sh');
+        if (File(debugPath).existsSync()) {
+          scriptPath = debugPath;
+        } else {
+          dev.log('Firewall script not found at $scriptPath', name: 'FirewallService');
+          return;
+        }
       }
 
-      dev.log('Running Linux firewall script via pkexec...', name: 'FirewallService');
+      // The --check mode was triggering Polkit prompts on some distributions.
+      // We rely entirely on the _configuredPorts lock/cache to prevent redundant prompts.
+      dev.log('Running Linux firewall script via pkexec for ports: ${ports.join(', ')}', name: 'FirewallService');
       
-      // pkexec will show a graphical sudo prompt
-      await Process.run('pkexec', ['bash', scriptPath]);
-      
+      // 2. Run with pkexec if check failed
+      try {
+        final List<String> setupArgs = ['bash', scriptPath] + ports.map((p) => p.toString()).toList();
+        final result = await Process.run('pkexec', setupArgs);
+        
+        if (result.exitCode != 0) {
+          dev.log('Firewall setup failed (exit ${result.exitCode}): ${result.stderr}', name: 'FirewallService');
+        } else {
+          dev.log('Firewall setup complete: ${result.stdout}', name: 'FirewallService');
+        }
+      } catch (e) {
+        dev.log('Error running firewall setup', name: 'FirewallService', error: e);
+      }
     } catch (e) {
       dev.log('Failed to setup Linux firewall', name: 'FirewallService', error: e);
     }

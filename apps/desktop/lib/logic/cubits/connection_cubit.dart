@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:developer' as dev;
 import 'dart:io';
+import 'package:path/path.dart' as p;
 import 'package:flutter/material.dart';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -8,6 +9,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:test/logic/constants/globals.dart' as globals;
 import 'package:test/data/services/connection_services.dart';
 import 'package:test/data/services/security_service.dart';
+import 'package:test/data/services/firewall_service.dart';
 
 enum ConnectionRole { none, host, join }
 
@@ -345,15 +347,18 @@ class ConnectionCubit extends Cubit<ConnectionState> {
       emit(state.copyWith(loadingStatus: 'Waiting for adapter...'));
       await Future.delayed(const Duration(seconds: 2));
     } else if (Platform.isLinux) {
-      emit(state.copyWith(loadingStatus: 'Enabling Linux Hotspot...'));
+      emit(state.copyWith(loadingStatus: 'Configuring Hotspot & Firewall...'));
 
       final hotspotStatus = await _enableLinuxHotspot();
       if (hotspotStatus != HotspotStatus.success) {
         _log('_initializeServer', 'Could not create Linux hotspot. Falling back to existing Wi-Fi network.');
+      } else {
+        // Mark ports as configured since the master script handled them
+        FirewallService().markPortsAsConfigured([42069, 42070]);
       }
 
       emit(state.copyWith(loadingStatus: 'Waiting for adapter...'));
-      await Future.delayed(const Duration(seconds: 2));
+      await Future.delayed(const Duration(milliseconds: 3500));
     }
 
     emit(state.copyWith(loadingStatus: 'Fetching IP Address...'));
@@ -372,8 +377,22 @@ class ConnectionCubit extends Cubit<ConnectionState> {
       final ssid = 'HotDrop_$safeHostname';
       final password = 'HotDrop${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}';
 
-      _log('_enableLinuxHotspot', 'Executing nmcli to create hotspot');
-      final result = await Process.run('nmcli', ['device', 'wifi', 'hotspot', 'ssid', ssid, 'password', password]);
+      // Find the bundled master script
+      final String baseDir = p.dirname(Platform.resolvedExecutable);
+      String scriptPath = p.join(baseDir, 'data', 'flutter_assets', 'assets', 'bin', 'linux-setup.sh');
+      
+      if (!File(scriptPath).existsSync()) {
+        final String debugPath = p.join(baseDir, 'assets', 'bin', 'linux-setup.sh');
+        if (File(debugPath).existsSync()) {
+          scriptPath = debugPath;
+        } else {
+          _log('_enableLinuxHotspot', 'Master script not found at $scriptPath');
+          return HotspotStatus.error;
+        }
+      }
+
+      _log('_enableLinuxHotspot', 'Executing master script via pkexec to create hotspot and configure firewall');
+      final result = await Process.run('pkexec', ['bash', scriptPath, ssid, password, '42069', '42070']);
 
       if (result.exitCode == 0) {
         _hotspotSsid = ssid;
@@ -382,14 +401,14 @@ class ConnectionCubit extends Cubit<ConnectionState> {
         globals.isHotspotActive = true;
         globals.activeHotspotSsid = ssid;
 
-        _log('_enableLinuxHotspot', 'Linux hotspot started successfully: SSID=$ssid');
+        _log('_enableLinuxHotspot', 'Linux hotspot and firewall configured successfully: SSID=$ssid');
         return HotspotStatus.success;
       }
 
-      _log('_enableLinuxHotspot', 'Failed to start Linux hotspot: ${result.stderr}');
+      _log('_enableLinuxHotspot', 'Failed to start Linux hotspot/firewall: ${result.stderr}');
       return HotspotStatus.error;
     } catch (e) {
-      _log('_enableLinuxHotspot', 'Error executing nmcli', error: e);
+      _log('_enableLinuxHotspot', 'Error executing master script', error: e);
       return HotspotStatus.error;
     }
   }
@@ -628,64 +647,77 @@ class ConnectionCubit extends Cubit<ConnectionState> {
   }
 
   Future<String?> _getBestIpAddress() async {
-    String? ipAddress;
+    _log('_getBestIpAddress', 'Searching for the best local IP address...');
+    String? selectedIp;
+    int bestScore = -10000;
+
     try {
       final interfaces = await NetworkInterface.list();
 
       for (final interface in interfaces) {
-        if (interface.name.contains('Local Area Connection*')) {
-          for (final addr in interface.addresses) {
-            if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
-              ipAddress = addr.address;
-              break;
-            }
-          }
-        }
-        if (ipAddress != null) {
-          break;
-        }
-      }
+        final name = interface.name.toLowerCase();
+        int baseScore = 0;
 
-      if (ipAddress == null) {
-        for (final interface in interfaces) {
-          final name = interface.name.toLowerCase();
-          if (name.contains('wi-fi') || name.contains('wifi') || name.contains('wlan') || name.contains('wlp')) {
-            for (final addr in interface.addresses) {
-              if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
-                ipAddress = addr.address;
-                break;
+        // 1. Prioritize Wi-Fi and Hotspot interfaces
+        if (name.contains('wi-fi') || name.contains('wifi') || name.contains('wlan') || name.contains('wlp') || name.contains('ap') || name.contains('uap')) {
+          baseScore += 100;
+        }
+        // 2. Secondary priority for Ethernet
+        else if (name.contains('eth') || name.contains('enp') || name.contains('eno')) {
+          baseScore += 50;
+        }
+        // 3. De-prioritize or exclude virtual/bridge/tunnel interfaces
+        if (name.contains('docker') ||
+            name.contains('veth') ||
+            name.contains('vbox') ||
+            name.contains('vmware') ||
+            name.contains('virtual') ||
+            name.contains('tailscale') ||
+            name.contains('zerotier') ||
+            name.contains('br-') ||
+            name.contains('tun') ||
+            name.contains('tap') ||
+            name.contains('wg') ||
+            name.contains('anyconnect')) {
+          baseScore -= 1000;
+        }
+
+        // 4. Windows specific hotspot names
+        if (interface.name.contains('Local Area Connection*')) {
+          baseScore += 150;
+        }
+
+        for (final addr in interface.addresses) {
+          if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
+            int currentScore = baseScore;
+
+            // Link-local is almost never what we want
+            if (addr.address.startsWith('169.254.')) {
+              currentScore -= 500;
+            }
+
+            // If hotspot is active, prioritize known gateway IPs
+            if (globals.isHotspotActive) {
+              if (addr.address == '10.42.0.1' || addr.address == '192.168.137.1') {
+                currentScore += 200;
               }
             }
-          }
-          if (ipAddress != null) {
-            break;
-          }
-        }
-      }
 
-      if (ipAddress == null) {
-        for (final interface in interfaces) {
-          final name = interface.name.toLowerCase();
-          if (name.contains('vbox') || name.contains('vmware') || name.contains('virtual')) {
-            continue;
-          }
-          for (final addr in interface.addresses) {
-            if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
-              ipAddress = addr.address;
-              break;
+            _log('_getBestIpAddress', 'Candidate: ${addr.address} on ${interface.name} (Score: $currentScore)');
+
+            if (currentScore > bestScore) {
+              bestScore = currentScore;
+              selectedIp = addr.address;
             }
-          }
-          if (ipAddress != null) {
-            break;
           }
         }
       }
     } catch (e) {
-      _log('_getBestIpAddress', 'Error getting IP', error: e);
+      _log('_getBestIpAddress', 'Error getting network interfaces', error: e);
     }
 
-    _log('_getBestIpAddress', 'Selected best IP: ${ipAddress ?? 'none'}');
-    return ipAddress;
+    _log('_getBestIpAddress', 'Final selection: ${selectedIp ?? 'none'} (Best Score: $bestScore)');
+    return selectedIp;
   }
 
   Future<void> _getHostInfo() async {
@@ -711,6 +743,9 @@ class ConnectionCubit extends Cubit<ConnectionState> {
       },
     );
 
+    // Ensure firewall rules are set for the bound port
+    await FirewallService().ensureRules(port: boundPort);
+
     globals.currentServerIp = ipAddress;
     final hasHotspot = _hotspotSsid != null && _hotspotPassword != null;
 
@@ -722,6 +757,8 @@ class ConnectionCubit extends Cubit<ConnectionState> {
       'password': _hotspotPassword,
       'tcp_port': boundPort,
     };
+
+    _log('_getHostInfo', 'Broadcasting Raw BLE Payload: $rawData');
 
     final qrData = jsonEncode(rawData);
     final String pin = (1000 + (9000 * (DateTime.now().millisecondsSinceEpoch % 1000) / 1000)).toInt().toString();

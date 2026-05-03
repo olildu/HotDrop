@@ -6,6 +6,7 @@ import 'package:gap/gap.dart';
 import 'package:test/logic/cubits/connection_cubit.dart';
 import 'package:test/presentation/screens/main_screen_view_model.dart';
 import 'package:test/presentation/theme/app_colors.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 class MainScreenReceiveView extends StatefulWidget {
   const MainScreenReceiveView({super.key});
@@ -24,6 +25,88 @@ class _MainScreenReceiveViewState extends State<MainScreenReceiveView> with Sing
       vsync: this,
       duration: const Duration(seconds: 3),
     )..repeat();
+  }
+
+  void _showQrCodeDialog(BuildContext context, String qrData) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            padding: EdgeInsets.all(24.w),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(24.r),
+              border: Border.all(
+                color: AppColors.primaryContainer.withValues(alpha: 0.3),
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.5),
+                  blurRadius: 20,
+                  spreadRadius: 5,
+                )
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Scan to Connect',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20.sp,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.grey),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+                Gap(20.h),
+                Container(
+                  padding: EdgeInsets.all(16.w),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16.r),
+                  ),
+                  child: QrImageView(
+                    data: qrData,
+                    version: QrVersions.auto,
+                    size: 250.h,
+                    gapless: false,
+                    eyeStyle: const QrEyeStyle(
+                      eyeShape: QrEyeShape.square,
+                      color: Colors.black,
+                    ),
+                    dataModuleStyle: const QrDataModuleStyle(
+                      dataModuleShape: QrDataModuleShape.square,
+                      color: Colors.black,
+                    ),
+                  ),
+                ),
+                Gap(20.h),
+                Text(
+                  'Use the HotDrop mobile app to scan this code.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.grey,
+                    fontSize: 14.sp,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -132,7 +215,7 @@ class _MainScreenReceiveViewState extends State<MainScreenReceiveView> with Sing
                                   ),
                                   textAlign: TextAlign.center,
                                 ),
-                                Gap(60.h),
+                                Gap(20.h),
 
                                 // PIN Display
                                 if (state.blePin != null && !state.isPaired) ...[
@@ -177,10 +260,33 @@ class _MainScreenReceiveViewState extends State<MainScreenReceiveView> with Sing
                                             letterSpacing: 6,
                                           ),
                                         ),
+                                        if (state.qrData != null) ...[
+                                          Gap(25.w),
+                                          Container(
+                                            width: 1,
+                                            height: 40.h,
+                                            color: Colors.white.withValues(alpha: 0.2),
+                                          ),
+                                          Gap(25.w),
+                                          MouseRegion(
+                                            cursor: SystemMouseCursors.click,
+                                            child: GestureDetector(
+                                              onTap: () => _showQrCodeDialog(context, state.qrData!),
+                                              child: Container(
+                                                padding: EdgeInsets.all(10.w),
+                                                decoration: BoxDecoration(
+                                                  color: AppColors.primaryContainer.withValues(alpha: 0.1),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: Icon(Icons.qr_code_2_rounded, color: AppColors.primaryContainer, size: 28.sp),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ],
                                     ),
                                   ),
-                                  Gap(50.h),
+                                  Gap(20.h),
                                 ],
 
                                 // Loading Status

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:gap/gap.dart';
@@ -226,31 +227,83 @@ class _MessageBubble extends StatelessWidget {
 
   const _MessageBubble({required this.message, required this.isSent});
 
+  void _showContextMenu(BuildContext context, Offset globalPosition) {
+    showMenu(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        globalPosition.dx,
+        globalPosition.dy,
+        globalPosition.dx + 1,
+        globalPosition.dy + 1,
+      ),
+      color: AppColors.surfaceContainerHigh,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12.r),
+        side: const BorderSide(color: AppColors.surfaceContainerHighest),
+      ),
+      elevation: 8,
+      items: [
+        PopupMenuItem(
+          height: 40.h,
+          onTap: () {
+            Clipboard.setData(ClipboardData(text: message));
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text("Message copied to clipboard"),
+                duration: const Duration(seconds: 2),
+                backgroundColor: AppColors.primaryContainer,
+                behavior: SnackBarBehavior.floating,
+                width: 250.w,
+              ),
+            );
+          },
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.copy_rounded, color: Colors.white, size: 16.sp),
+              Gap(12.w),
+              Text(
+                "Copy Message",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 13.sp,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 30.w, vertical: 8.h),
       child: Align(
         alignment: isSent ? Alignment.centerRight : Alignment.centerLeft,
-        child: Container(
-          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.6),
-          padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 15.h),
-          decoration: BoxDecoration(
-            color: isSent ? AppColors.primaryContainer : AppColors.surfaceContainerHighest.withValues(alpha: 0.3),
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(20.r),
-              topRight: Radius.circular(20.r),
-              bottomLeft: isSent ? Radius.circular(20.r) : Radius.circular(4.r),
-              bottomRight: isSent ? Radius.circular(4.r) : Radius.circular(20.r),
+        child: GestureDetector(
+          onSecondaryTapDown: (details) => _showContextMenu(context, details.globalPosition),
+          child: Container(
+            constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.6),
+            padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 15.h),
+            decoration: BoxDecoration(
+              color: isSent ? AppColors.primaryContainer : AppColors.surfaceContainerHighest.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(20.r),
+                topRight: Radius.circular(20.r),
+                bottomLeft: isSent ? Radius.circular(20.r) : Radius.circular(4.r),
+                bottomRight: isSent ? Radius.circular(4.r) : Radius.circular(20.r),
+              ),
+              border: isSent ? null : Border.all(color: AppColors.surfaceContainerHighest),
             ),
-            border: isSent ? null : Border.all(color: AppColors.surfaceContainerHighest),
-          ),
-          child: Text(
-            message,
-            style: TextStyle(
-              color: isSent ? Colors.white : Colors.grey.shade200,
-              fontSize: 14.sp,
-              height: 1.4,
+            child: Text(
+              message,
+              style: TextStyle(
+                color: isSent ? Colors.white : Colors.grey.shade200,
+                fontSize: 14.sp,
+                height: 1.4,
+              ),
             ),
           ),
         ),
