@@ -252,8 +252,13 @@ class BleInteropService {
   }
 
   Future<Map<String, dynamic>?> _sendCommand(String cmd, Map<String, dynamic>? extras, Function(String) log) async {
-    _log('_sendCommand', 'Sending bridge command: $cmd');
+    final shouldLogTraffic = cmd != 'ping';
+
     try {
+      if (shouldLogTraffic) {
+        _log('_sendCommand', 'Sending bridge command: $cmd');
+      }
+
       final socket = await Socket.connect('127.0.0.1', _ipcPort).timeout(_bridgeConnectTimeout);
 
       final Map<String, dynamic> payload = {"command": cmd};
@@ -266,7 +271,10 @@ class BleInteropService {
 
       final response = await socket.cast<List<int>>().transform(utf8.decoder).join();
       socket.destroy();
-      _log('_sendCommand', 'Received response for command: $cmd');
+
+      if (shouldLogTraffic) {
+        _log('_sendCommand', 'Received response for command: $cmd');
+      }
 
       return jsonDecode(response);
     } catch (e) {

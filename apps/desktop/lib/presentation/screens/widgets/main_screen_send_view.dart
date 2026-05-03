@@ -51,9 +51,11 @@ class _MainScreenSendViewState extends State<MainScreenSendView> with SingleTick
                     child: MouseRegion(
                       cursor: SystemMouseCursors.click,
                       child: GestureDetector(
-                        onTap: () {
-                          // Stop scanning and pop back
-                          context.read<ConnectionCubit>().disconnect();
+                        onTap: () async {
+                          await context.read<ConnectionCubit>().stopConnectionScreenSession();
+                          if (!context.mounted) {
+                            return;
+                          }
                           Navigator.pop(context);
                         },
                         child: Container(

@@ -322,8 +322,11 @@ class _MainScreenReceiveViewState extends State<MainScreenReceiveView> with Sing
                   child: MouseRegion(
                     cursor: SystemMouseCursors.click,
                     child: GestureDetector(
-                      onTap: () {
-                        context.read<ConnectionCubit>().disconnect();
+                      onTap: () async {
+                        await context.read<ConnectionCubit>().stopHosting();
+                        if (!context.mounted) {
+                          return;
+                        }
                         Navigator.pop(context);
                       },
                       child: Container(
