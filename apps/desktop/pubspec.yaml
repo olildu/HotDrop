@@ -87,6 +87,7 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   assets:
     - assets/bin/
+    - assets/images/app_logo/
 
 
   # An image asset can refer to one or more resolution-specific "variants", see
@@ -120,4 +121,4 @@ msix_config:
   publisher_display_name: Olildu
   identity_name: com.olildu.hotdrop
   msix_version: 1.0.0.0
-  logo_path: assets/bin/logo.png # Placeholder path, update if you have an icon
+  logo_path: assets/images/app_logo/app_logo.png
