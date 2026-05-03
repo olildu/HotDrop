@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:gap/gap.dart';
@@ -179,30 +180,74 @@ class _MessageBubble extends StatelessWidget {
   final MessageModel message;
   const _MessageBubble({required this.message});
 
+  void _showDropdownMenu(BuildContext context, Offset position) {
+    showMenu(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        position.dx,
+        position.dy,
+        position.dx + 1,
+        position.dy + 1,
+      ),
+      color: AppColors.surfaceContainerHigh,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+      items: [
+        PopupMenuItem(
+          value: 'copy',
+          child: Row(
+            children: [
+              Icon(Icons.copy_rounded, color: AppColors.onSurface, size: 20.sp),
+              Gap(12.w),
+              Text('Copy', style: TextStyle(color: AppColors.onSurface, fontSize: 14.sp)),
+            ],
+          ),
+        ),
+      ],
+    ).then((value) {
+      if (value == 'copy') {
+        Clipboard.setData(ClipboardData(text: message.content));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Message copied to clipboard', style: TextStyle(color: AppColors.surface)),
+            backgroundColor: AppColors.onSurface,
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
+          ),
+        );
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final isMe = message.isSent;
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: EdgeInsets.only(bottom: 16.h),
-        padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 14.h),
-        constraints: BoxConstraints(maxWidth: 0.75.sw),
-        decoration: BoxDecoration(
-          color: isMe ? AppColors.primary : AppColors.surfaceContainerHigh,
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(24.r),
-            topRight: Radius.circular(24.r),
-            bottomLeft: Radius.circular(isMe ? 24.r : 4.r),
-            bottomRight: Radius.circular(isMe ? 4.r : 24.r),
+      child: GestureDetector(
+        onLongPressStart: (details) {
+          _showDropdownMenu(context, details.globalPosition);
+        },
+        child: Container(
+          margin: EdgeInsets.only(bottom: 16.h),
+          padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 14.h),
+          constraints: BoxConstraints(maxWidth: 0.75.sw),
+          decoration: BoxDecoration(
+            color: isMe ? AppColors.primary : AppColors.surfaceContainerHigh,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(24.r),
+              topRight: Radius.circular(24.r),
+              bottomLeft: Radius.circular(isMe ? 24.r : 4.r),
+              bottomRight: Radius.circular(isMe ? 4.r : 24.r),
+            ),
           ),
-        ),
-        child: Text(
-          message.content,
-          style: TextStyle(
-            color: isMe ? AppColors.surface : AppColors.onSurface,
-            fontSize: 15.sp,
-            height: 1.4,
+          child: Text(
+            message.content,
+            style: TextStyle(
+              color: isMe ? AppColors.surface : AppColors.onSurface,
+              fontSize: 15.sp,
+              height: 1.4,
+            ),
           ),
         ),
       ),

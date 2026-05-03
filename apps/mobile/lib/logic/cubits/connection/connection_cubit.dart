@@ -164,7 +164,13 @@ class ConnectionCubit extends Cubit<ConnectionCubitState> {
             if (char.uuid == Guid(_charUuid)) {
               // Read the JSON credentials from the peer
               List<int> value = await char.read();
-              String jsonStr = utf8.decode(value);
+              // Remove null bytes and trim whitespace
+              String jsonStr = utf8.decode(value).replaceAll(RegExp(r'\x00'), '').trim();
+              
+              // Handle quotes if desktop accidentally JSON encoded the HP string
+              if (jsonStr.startsWith('"') && jsonStr.endsWith('"')) {
+                jsonStr = jsonStr.substring(1, jsonStr.length - 1);
+              }
 
               await device.disconnect();
               

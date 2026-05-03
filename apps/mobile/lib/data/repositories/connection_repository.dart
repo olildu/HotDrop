@@ -18,7 +18,13 @@ class ConnectionRepository {
   Future<bool> joinSession(String rawCredentials) async {
     dev.log('Joining session...', name: 'joinSession');
     try {
-      final creds = jsonDecode(rawCredentials);
+      dynamic creds = jsonDecode(rawCredentials);
+
+      // Handle accidental double-encoded JSON strings
+      if (creds is String) {
+        creds = jsonDecode(creds);
+      }
+
       final int? port = creds['tcp_port'];
       if (creds['isDesktop'] == true) {
         return await _clientService.connectToHostSocket(creds['ip'], port: port);
