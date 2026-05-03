@@ -26,10 +26,20 @@ class _SendScreenState extends State<SendScreen> {
     return BlocListener<ConnectionCubit, ConnectionCubitState>(
       listener: (context, state) {
         final connectionCubit = context.read<ConnectionCubit>();
-        if (connectionCubit.shouldCloseScreen(state)) Navigator.pop(context);
+        if (connectionCubit.shouldCloseScreen(state)) {
+          final navigator = Navigator.of(context);
+          final routeIsCurrent = ModalRoute.of(context)?.isCurrent ?? true;
+          if (!routeIsCurrent && navigator.canPop()) {
+            navigator.pop();
+          }
+          if (navigator.canPop()) {
+            navigator.pop();
+          }
+        }
         final errorText = connectionCubit.errorText(state);
         if (errorText != null) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorText)));
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(errorText)));
         }
       },
       child: Scaffold(
@@ -50,13 +60,18 @@ class _SendScreenState extends State<SendScreen> {
         children: [
           Icon(Icons.bubble_chart, color: AppColors.primary, size: 28.sp),
           Gap(8.w),
-          Text("HotDrop", style: GoogleFonts.inter(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 22.sp)),
+          Text("HotDrop",
+              style: GoogleFonts.inter(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 22.sp)),
         ],
       ),
       actions: [
         Padding(
           padding: EdgeInsets.only(right: 20.w),
-          child: Icon(Icons.account_circle_outlined, color: AppColors.onSurface, size: 28.sp),
+          child: Icon(Icons.account_circle_outlined,
+              color: AppColors.onSurface, size: 28.sp),
         ),
       ],
     );

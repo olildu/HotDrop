@@ -19,9 +19,9 @@ class RadarStateView extends StatefulWidget {
   State<RadarStateView> createState() => _RadarStateViewState();
 }
 
-class _RadarStateViewState extends State<RadarStateView> with SingleTickerProviderStateMixin {
+class _RadarStateViewState extends State<RadarStateView>
+    with SingleTickerProviderStateMixin {
   late AnimationController _pulseController;
-  bool _showScanner = false;
 
   @override
   void initState() {
@@ -56,13 +56,13 @@ class _RadarStateViewState extends State<RadarStateView> with SingleTickerProvid
             ],
           ),
         ),
-        if (!widget.isReceiving && _showScanner) _buildScannerOverlay(context, textTheme),
       ],
     );
   }
 
   Widget _buildRadar(BuildContext context) {
-    return BlocBuilder<ConnectionCubit, ConnectionCubitState>(builder: (context, state) {
+    return BlocBuilder<ConnectionCubit, ConnectionCubitState>(
+        builder: (context, state) {
       return SizedBox(
         height: 320.h,
         width: 320.w,
@@ -91,17 +91,22 @@ class _RadarStateViewState extends State<RadarStateView> with SingleTickerProvid
                   shape: BoxShape.circle,
                 ),
                 child: Center(
-                  child: Icon(Icons.sensors_rounded, color: AppColors.primary, size: 32.sp),
+                  child: Icon(Icons.sensors_rounded,
+                      color: AppColors.primary, size: 32.sp),
                 ),
               ),
-            if (!widget.isReceiving) ...state.discoveredDevices.asMap().entries.map((entry) => _buildOrbitalNode(context, entry.key, entry.value, state.discoveredDevices.length)),
+            if (!widget.isReceiving)
+              ...state.discoveredDevices.asMap().entries.map((entry) =>
+                  _buildOrbitalNode(context, entry.key, entry.value,
+                      state.discoveredDevices.length)),
           ],
         ),
       );
     });
   }
 
-  Widget _buildOrbitalNode(BuildContext context, int index, DiscoveredDevice device, int count) {
+  Widget _buildOrbitalNode(
+      BuildContext context, int index, DiscoveredDevice device, int count) {
     final radius = 130.w;
     double angle;
     if (count == 1) {
@@ -159,7 +164,9 @@ class _RadarStateViewState extends State<RadarStateView> with SingleTickerProvid
         ),
         Gap(12.h),
         Text(
-          widget.isReceiving ? "Nearby devices can see you as" : "Select a device nearby to share.",
+          widget.isReceiving
+              ? "Nearby devices can see you as"
+              : "Select a device nearby to share.",
           textAlign: TextAlign.center,
           style: textTheme.titleMedium?.copyWith(
             color: AppColors.onSurfaceVariant,
@@ -180,9 +187,11 @@ class _RadarStateViewState extends State<RadarStateView> with SingleTickerProvid
   }
 
   Widget _buildStatusCard(BuildContext context, TextTheme textTheme) {
-    return BlocBuilder<ConnectionCubit, ConnectionCubitState>(builder: (context, state) {
+    return BlocBuilder<ConnectionCubit, ConnectionCubitState>(
+        builder: (context, state) {
       final connectionCubit = context.read<ConnectionCubit>();
-      final statusMsg = connectionCubit.statusMessage(isReceiving: widget.isReceiving);
+      final statusMsg =
+          connectionCubit.statusMessage(isReceiving: widget.isReceiving);
 
       return Padding(
         padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 32.h),
@@ -204,8 +213,13 @@ class _RadarStateViewState extends State<RadarStateView> with SingleTickerProvid
                       shape: BoxShape.circle,
                     ),
                     child: connectionCubit.isConnectingState(state)
-                        ? SizedBox(height: 20.sp, width: 20.sp, child: const CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary))
-                        : Icon(Icons.wifi_tethering_rounded, color: AppColors.primary, size: 20.sp),
+                        ? SizedBox(
+                            height: 20.sp,
+                            width: 20.sp,
+                            child: const CircularProgressIndicator(
+                                strokeWidth: 2, color: AppColors.primary))
+                        : Icon(Icons.wifi_tethering_rounded,
+                            color: AppColors.primary, size: 20.sp),
                   ),
                   Gap(16.w),
                   Expanded(
@@ -223,11 +237,13 @@ class _RadarStateViewState extends State<RadarStateView> with SingleTickerProvid
                 Gap(20.h),
                 Container(
                   width: double.infinity,
-                  padding: EdgeInsets.symmetric(vertical: 16.h, horizontal: 5.w),
+                  padding:
+                      EdgeInsets.symmetric(vertical: 16.h, horizontal: 5.w),
                   decoration: BoxDecoration(
                     color: AppColors.primary.withOpacity(0.08),
                     borderRadius: BorderRadius.circular(24.r),
-                    border: Border.all(color: AppColors.primary.withOpacity(0.15)),
+                    border:
+                        Border.all(color: AppColors.primary.withOpacity(0.15)),
                   ),
                   child: Row(
                     children: [
@@ -255,12 +271,15 @@ class _RadarStateViewState extends State<RadarStateView> with SingleTickerProvid
                         ),
                       ),
                       Container(
-                        padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 8.h),
+                        padding: EdgeInsets.symmetric(
+                            horizontal: 14.w, vertical: 8.h),
                         margin: EdgeInsets.only(right: 5.w),
                         decoration: BoxDecoration(
                           color: AppColors.surfaceContainerHighest,
                           borderRadius: BorderRadius.circular(12.r),
-                          border: Border.all(color: AppColors.primary.withOpacity(0.3), width: 1.5),
+                          border: Border.all(
+                              color: AppColors.primary.withOpacity(0.3),
+                              width: 1.5),
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withOpacity(0.2),
@@ -274,7 +293,8 @@ class _RadarStateViewState extends State<RadarStateView> with SingleTickerProvid
                           style: GoogleFonts.firaMono(
                             fontSize: 18.sp,
                             fontWeight: FontWeight.bold,
-                            color: AppColors.primary, // Make the text primary color for "glow" effect on dark
+                            color: AppColors
+                                .primary, // Make the text primary color for "glow" effect on dark
                             letterSpacing: 2,
                           ),
                         ),
@@ -297,7 +317,17 @@ class _RadarStateViewState extends State<RadarStateView> with SingleTickerProvid
                   ),
                   if (!widget.isReceiving)
                     GestureDetector(
-                      onTap: () => setState(() => _showScanner = true),
+                      onTap: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => BlocProvider.value(
+                              value: context.read<ConnectionCubit>(),
+                              child: const QrScannerPage(),
+                            ),
+                          ),
+                        );
+                      },
                       child: Text(
                         "Scan QR Instead",
                         style: textTheme.bodyMedium?.copyWith(
@@ -328,53 +358,48 @@ class _RadarStateViewState extends State<RadarStateView> with SingleTickerProvid
                       ),
                     ),
                 ],
-              )
+              ),
             ],
           ),
         ),
       );
     });
   }
+}
 
-  Widget _buildScannerOverlay(BuildContext context, TextTheme textTheme) {
-    return Positioned.fill(
-      child: Container(
-        color: AppColors.surface,
-        child: Column(
-          children: [
-            AppBar(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              leading: BackButton(
-                color: AppColors.onSurface,
-                onPressed: () => setState(() => _showScanner = false),
-              ),
-              title: Text("Scan QR Code", style: textTheme.titleMedium),
-            ),
-            Expanded(
-              child: Container(
-                margin: EdgeInsets.all(40.w),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(32.r),
-                  border: Border.all(color: AppColors.surfaceContainerHighest, width: 4.w),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(28.r),
-                  child: MobileScanner(
-                    onDetect: (capture) {
-                      final code = capture.barcodes.first.rawValue;
-                      context.read<ConnectionCubit>().handleQrScan(code);
-                    },
-                  ),
-                ),
-              ),
-            ),
-          ],
+class QrScannerPage extends StatelessWidget {
+  const QrScannerPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Scaffold(
+      backgroundColor: AppColors.surface,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: const BackButton(color: AppColors.onSurface),
+        title: Text("Scan QR Code", style: textTheme.titleMedium),
+      ),
+      body: Container(
+        margin: EdgeInsets.all(40.w),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(32.r),
+          border:
+              Border.all(color: AppColors.surfaceContainerHighest, width: 4.w),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28.r),
+          child: MobileScanner(
+            onDetect: (capture) {
+              final code = capture.barcodes.first.rawValue;
+              context.read<ConnectionCubit>().handleQrScan(code);
+            },
+          ),
         ),
       ),
     );
   }
-
 }
 
 class QrDisplayPage extends StatelessWidget {
@@ -399,16 +424,19 @@ class QrDisplayPage extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.hourglass_top_rounded, size: 48.sp, color: AppColors.primary),
+                  Icon(Icons.hourglass_top_rounded,
+                      size: 48.sp, color: AppColors.primary),
                   Gap(16.h),
                   Text(
                     "Generating QR Code...",
-                    style: textTheme.titleMedium?.copyWith(color: AppColors.onSurfaceVariant),
+                    style: textTheme.titleMedium
+                        ?.copyWith(color: AppColors.onSurfaceVariant),
                   ),
                   Gap(8.h),
                   Text(
                     "The hotspot is still starting up.",
-                    style: textTheme.bodySmall?.copyWith(color: AppColors.onSurfaceVariant),
+                    style: textTheme.bodySmall
+                        ?.copyWith(color: AppColors.onSurfaceVariant),
                   ),
                 ],
               ),
@@ -453,11 +481,13 @@ class QrDisplayPage extends StatelessWidget {
                         if (state.blePin != null) ...[
                           Container(
                             width: double.infinity,
-                            padding: EdgeInsets.symmetric(vertical: 14.h, horizontal: 16.w),
+                            padding: EdgeInsets.symmetric(
+                                vertical: 14.h, horizontal: 16.w),
                             decoration: BoxDecoration(
                               color: AppColors.primary.withOpacity(0.08),
                               borderRadius: BorderRadius.circular(16.r),
-                              border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+                              border: Border.all(
+                                  color: AppColors.primary.withOpacity(0.2)),
                             ),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
