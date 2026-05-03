@@ -279,6 +279,51 @@ class ConnectionCubit extends Cubit<ConnectionState> {
     emit(const ConnectionState());
   }
 
+  Future<void> stopHosting() async {
+    _log('stopHosting', 'Stop hosting requested. Cleaning up host resources');
+
+    try {
+      await globals.bleInteropService.stopAdvertising((_) {});
+    } catch (e, stackTrace) {
+      _log('stopHosting', 'Failed to stop BLE advertising cleanly', error: e, stackTrace: stackTrace);
+    }
+
+    _hotspotSsid = null;
+    _hotspotPassword = null;
+    globals.currentServerIp = null;
+    globals.isHotspotActive = false;
+    globals.activeHotspotSsid = null;
+
+    DartFunction().closePort();
+    shutdownHotspotSync();
+
+    if (!isClosed) {
+      emit(const ConnectionState());
+    }
+  }
+
+  Future<void> stopConnectionScreenSession() async {
+    switch (state.selectedRole) {
+      case ConnectionRole.host:
+        await stopHosting();
+        break;
+      case ConnectionRole.join:
+        _log('stopConnectionScreenSession', 'Stop joining requested. Cleaning up BLE bridge');
+
+        try {
+          await globals.bleInteropService.dispose();
+        } catch (e, stackTrace) {
+          _log('stopConnectionScreenSession', 'Failed to dispose BLE bridge cleanly', error: e, stackTrace: stackTrace);
+        }
+
+        disconnect();
+        break;
+      case ConnectionRole.none:
+        disconnect();
+        break;
+    }
+  }
+
   void reset() {
     disconnect();
   }
