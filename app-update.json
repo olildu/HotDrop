@@ -1,0 +1,14 @@
+{
+  "desktop": {
+    "version": "1.0.1",
+    "url": "https://github.com/olildu/HotDrop/releases/download/v1.0.1/HotDrop-Windows.msix",
+    "notes": "HotDrop Desktop v1.0.1 - Minor fixes and performance improvements.",
+    "pub_date": "2026-05-03T12:00:00Z"
+  },
+  "mobile": {
+    "version": "1.0.1",
+    "url": "https://github.com/olildu/HotDrop/releases/download/v1.0.1/HotDrop-Android.apk",
+    "notes": "HotDrop Mobile v1.0.1 - Bug fixes and UI improvements.",
+    "pub_date": "2026-05-03T12:00:00Z"
+  }
+}
