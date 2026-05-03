@@ -78,9 +78,6 @@ flutter_launcher_icons:
   windows:
     generate: true
     image_path: "assets/images/app_logo/app_logo.png"
-  linux:
-    generate: true
-    image_path: "assets/images/app_logo/app_logo.png"
  
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

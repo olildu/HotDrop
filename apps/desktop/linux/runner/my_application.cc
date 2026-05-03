@@ -1,6 +1,7 @@
 #include "my_application.h"
 
 #include <flutter_linux/flutter_linux.h>
+#include <unistd.h>
 #ifdef GDK_WINDOWING_X11
 #include <gdk/gdkx.h>
 #endif
@@ -53,6 +54,23 @@ static void my_application_activate(GApplication* application) {
   }
 
   gtk_window_set_default_size(window, 1280, 720);
+  gtk_window_set_icon_name(window, APPLICATION_ID);
+
+  char exe_path[4096];
+  ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
+  if (len != -1) {
+    exe_path[len] = '\0';
+    gchar* dir = g_path_get_dirname(exe_path);
+    gchar* icon_path = g_build_filename(dir, "data", "flutter_assets", "assets", "images", "app_logo", "app_logo.png", nullptr);
+    g_autoptr(GError) error = nullptr;
+    GdkPixbuf* icon = gdk_pixbuf_new_from_file(icon_path, &error);
+    if (icon != nullptr) {
+      gtk_window_set_icon(window, icon);
+      g_object_unref(icon);
+    }
+    g_free(icon_path);
+    g_free(dir);
+  }
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(
